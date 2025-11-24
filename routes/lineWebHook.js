@@ -1,7 +1,8 @@
 import express, { Route } from "express";
 import * as line from "@line/bot-sdk";
 import * as logger from "../methods/logger.js";
-
+import * as menuController from "../SQL_controller/menu.js";
+import * as JWTIssue from "../methods/JWT_issue.js";
 const router = express.Router();
 
 // 給 middleware 用的設定
@@ -35,14 +36,18 @@ async function handleEvent(event) {
     return;
   }
 
+  const lineUserId = event?.source?.userId;
+
   const text = event.message.text;
 
   let replyText;
-  if (text === "確認庫存") replyText = handleInventory();
+  if (text === "確認庫存") replyText = await handleInventory();
   else if (text === "指令")
     replyText = "可用指令：確認庫存 / 自動進貨 / 補貨 / 指令";
-  else if (text === "自動進貨") replyText = handleRestockList();
-  else if (text === "補貨") replyText = handleRestock();
+  else if (text === "自動進貨") replyText = await handleRestockList();
+  else if (text === "補貨") replyText = await handleRestock();
+  else if (text === "菜單") replyText = await handleMenu();
+  else if (text === "權限註冊") replyText = await handleRegister(lineUserId);
   else replyText = "輸入「指令」以確認可用命令";
 
   return client.replyMessage({
@@ -65,11 +70,18 @@ async function handleInventory() {
 async function handleRestockList() {
   return `歡迎來到自動進貨選項，以下為推薦的補貨清單
   
-  請點擊連結已做修改`;
+請點擊連結已做修改`;
 }
 
 async function handleRestock() {
   return `歡迎來到補貨功能，請點擊連結並依序輸入如何補貨`;
 }
 
+async function handleMenu() {
+  return JSON.stringify(await menuController.getMenus());
+}
+
+async function handleRegister(lineUserId) {
+  return (await JWTIssue.issueRegToken(lineUserId)).toString();
+}
 export default router;

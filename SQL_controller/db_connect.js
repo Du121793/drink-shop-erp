@@ -2,15 +2,14 @@ import pg from "pg";
 import dotenv from "dotenv";
 import * as logger from "../methods/logger.js";
 
-// 載入環境變數
 dotenv.config();
 
 // 數據庫配置
 const DB_CONFIG = {
   host: process.env.DATABASE_URL || "127.0.0.1",
   port: process.env.DATABASE_PORT_RW || 5432,
-  database: process.env.DATABASE_NAME || "aqua_datahub",
-  user: process.env.DATABASE_USER || "aqua_migrator",
+  database: process.env.DATABASE_NAME || "",
+  user: process.env.DATABASE_USER || "",
   password: process.env.DATABASE_PASSWORD || "",
   ssl:
     process.env.NODE_ENV === "production"
@@ -18,7 +17,7 @@ const DB_CONFIG = {
           rejectUnauthorized: false, // 允許自簽名證書
           require: true, // 強制要求 SSL 連接
         }
-      : false, // 開發環境不使用 SSL
+      : false,
 };
 
 // 連接池實例
@@ -26,13 +25,13 @@ let poolRW = null;
 let poolRO = null;
 
 // 重連配置
-const RECONNECT_INTERVAL = 5000; // 5秒重連間隔
+const RECONNECT_INTERVAL = 5000;
 
 // 創建連接池
 function createPool(config, isReadOnly = false) {
   const poolConfig = {
     ...config,
-    application_name: isReadOnly ? "aqua_ro" : "aqua_rw",
+    application_name: isReadOnly ? "drink_ro" : "drink_rw",
   };
 
   const pool = new pg.Pool(poolConfig);
@@ -55,7 +54,7 @@ function createPool(config, isReadOnly = false) {
         } else {
           poolRW = createPool(config, false);
         }
-      }, 5000); // 5秒後重連
+      }, 5000);
     }
   });
 
@@ -115,7 +114,7 @@ async function startupCheck() {
 
   while (true) {
     attempts++;
-    logger.warn(`第 ${attempts} 次嘗試重新連接資料庫","資料庫`);
+    logger.warn(`第 ${attempts} 次嘗試重新連接資料庫`, "資料庫");
 
     if (await initializePools()) {
       return true;

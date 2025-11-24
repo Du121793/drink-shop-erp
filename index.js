@@ -3,16 +3,25 @@ import dotenv from "dotenv";
 import { startupCheck } from "./SQL_controller/index.js";
 import * as logger from "./methods/logger.js";
 import lineWebHook from "./routes/lineWebHook.js";
+import menu from "./routes/menu.js";
+import inventory from "./routes/inventory.js";
 
 const app = express();
 dotenv.config();
 
+app.use("/line", lineWebHook);
+
 app.use(express.json());
 app.use(express.urlencoded());
 
-const SERVER_PORT = process.env.SERVER_PORT || 3000;
+app.use("/menu", menu);
+app.use("/inventory", inventory);
 
-app.use("/line", lineWebHook);
+app.get("/", (req, res) => {
+  res.send("伺服器運行中");
+});
+
+const SERVER_PORT = process.env.SERVER_PORT || 3000;
 
 app.listen(SERVER_PORT, () => {
   try {
