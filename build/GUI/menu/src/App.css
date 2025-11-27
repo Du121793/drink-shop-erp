@@ -1,42 +1,290 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+/* =========================================
+   1. 全域設定與變數 (Global & Variables)
+   ========================================= */
+:root {
+  --primary-color: #d35400; /* 品牌主色：暖橘 */
+  --bg-color: #f5f5f5;
+  --text-color: #333;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; /* 防止左右滑動 */
+}
+
+body {
+  /* 電腦版背景給深灰色，這樣中間的白色 App 才會凸顯出來 */
+  background-color: #303030; 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* =========================================
+   2. 主容器佈局 (Layout Container)
+   ========================================= */
+
+/* 模擬手機螢幕的容器 */
+.mobile-container {
+  width: 100%;
+  max-width: 480px; /* 電腦上限制最大寬度，像手機一樣 */
+  min-height: 100vh;
+  margin: 0 auto;   /* 讓它在電腦螢幕水平置中 */
+  background-color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  /* 在電腦上加陰影，製造浮起感 */
+  box-shadow: 0 0 50px rgba(0,0,0,0.5); 
+}
+
+/* 真實手機裝置 (螢幕小於 480px) 的特殊處理 */
+@media (max-width: 480px) {
+  .mobile-container {
+    box-shadow: none; /* 手機上不需要陰影 */
+    max-width: 100%;  /* 手機上強制滿版 */
+  }
+}
+
+/* Header 樣式 */
+.header {
+  background-color: white;
+  padding: 18px;
   text-align: center;
+  border-bottom: 1px solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: var(--primary-color);
+  letter-spacing: 1px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* 內容滾動區 */
+.content {
+  flex: 1;
+  padding: 15px;
+  padding-bottom: 80px; /* 預留底部空間給 footer 或捲動緩衝 */
+  overflow-y: auto;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+/* =========================================
+   3. 元件樣式 (Components)
+   ========================================= */
+
+/* 產品卡片 */
+.product-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border: 1px solid #f0f0f0;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  cursor: pointer;
+  transition: transform 0.2s;
+  overflow: hidden; /* 防止內容溢出 */
+}
+
+.product-card:active {
+  transform: scale(0.97); /* 點擊時縮小效果 */
+  background-color: #fafafa;
+}
+
+/* 產品文字資訊 */
+.product-info {
+  flex: 1;
+  min-width: 0; /* 防止文字過長撐開容器 */
+  margin-right: 10px;
+}
+
+.product-info h3 {
+  margin: 0 0 6px 0;
+  font-size: 17px;
+  color: #222;
+  /* 文字過長省略號處理 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-price {
+  color: var(--primary-color);
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+/* 選購按鈕 */
+.add-btn {
+  flex-shrink: 0;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* =========================================
+   4. Modal 彈窗 (Modal & Overlay)
+   ========================================= */
+
+/* 遮罩層：使用 fixed 覆蓋全螢幕 */
+.modal-overlay {
+  position: fixed; 
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7); /* 深黑色半透明 */
+  backdrop-filter: blur(3px);           /* 背景模糊效果 */
+  z-index: 9999;                        /* 確保在最上層 */
+  
+  display: flex;
+  justify-content: center;
+  align-items: flex-end; /* 手機預設：從底部滑出 */
+}
+
+/* 彈窗內容容器 */
+.modal-content {
+  background: white;
+  width: 100%;
+  max-width: 480px; /* 限制寬度跟手機容器一樣 */
+  max-height: 85vh; /* 最高佔畫面 85% */
+  
+  border-radius: 24px 24px 0 0; /* 上方圓角 */
+  padding: 24px;
+  
+  display: flex;
+  flex-direction: column;
+  
+  /* 進場動畫 */
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 電腦版優化：讓視窗垂直居中 */
+@media (min-width: 481px) {
+  .modal-overlay {
+    align-items: center; 
   }
-  to {
-    transform: rotate(360deg);
+  
+  .modal-content {
+    border-radius: 24px; /* 四個角都圓的 */
+    width: 400px;        /* 電腦版稍微窄一點比較精緻 */
+    max-height: 80vh;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.card {
-  padding: 2em;
+/* Modal 標題列 */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
 }
 
-.read-the-docs {
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #333;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 28px;
   color: #888;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+/* =========================================
+   5. 選項按鈕 (Options Chips)
+   ========================================= */
+
+.option-group {
+  margin-bottom: 24px;
+}
+
+.option-title {
+  font-weight: bold;
+  margin-bottom: 12px;
+  display: block;
+  font-size: 1rem;
+  color: #555;
+}
+
+.option-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 選項按鈕本體 */
+.choice-chip {
+  padding: 10px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 30px;
+  background: white;
+  font-size: 15px;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap; /* 文字不換行 */
+}
+
+.choice-chip:active {
+  transform: scale(0.95);
+}
+
+/* 選中狀態 (橘色高亮) */
+.choice-chip.selected {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  font-weight: bold;
+  box-shadow: 0 4px 10px rgba(211, 84, 0, 0.3);
+}
+
+/* =========================================
+   6. 底部按鈕 (Footer)
+   ========================================= */
+
+.modal-footer {
+  margin-top: auto;
+  padding-top: 15px;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(211, 84, 0, 0.4);
+  transition: transform 0.1s;
+}
+
+.submit-btn:active {
+  transform: scale(0.98);
 }
