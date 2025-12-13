@@ -274,6 +274,57 @@ async function updateBoms(bomsData) {
     }
 }
 
+/**
+ * 扣除庫存 (FIFO)
+ * @param {object} client - pg client
+ * @param {number} bomId - bom_id
+ * @param {number} amountToReduce - 要扣除的數量
+ */
+async function deductStock(client, bomId, amountToReduce) {
+    if (amountToReduce <= 0) return;
+
+    const validStocks = await client.query(
+      `SELECT i.inventory_id, i.remaining_qty
+       FROM inventory i
+       JOIN bom b ON i.bom_id = b.bom_id
+       WHERE i.bom_id = $1 AND i.remaining_qty > 0
+         AND (b.shelf_life_days IS NULL OR (i.stock_in_time + (b.shelf_life_days * INTERVAL '1 day')) >= NOW())
+       ORDER BY i.stock_in_time ASC`,
+      [bomId]
+    );
+
+    let remainingToReduce = amountToReduce;
+    for (const stock of validStocks.rows) {
+      if (remainingToReduce <= 0) break;
+      const reduction = Math.min(remainingToReduce, stock.remaining_qty);
+      await client.query(
+        "UPDATE inventory SET remaining_qty = remaining_qty - $1 WHERE inventory_id = $2",
+        [reduction, stock.inventory_id]
+      );
+      remainingToReduce -= reduction;
+    }
+
+    if (remainingToReduce > 0) {
+        // This case should be prevented by the pre-check, but as a safeguard:
+        throw new Error(`庫存扣除失敗，原料ID ${bomId} 最終仍有 ${remainingToReduce} 數量不足`);
+    }
+}
+
+/**
+ * 歸還庫存
+ * @param {object} client - pg client
+ * @param {number} bomId - bom_id
+ * @param {number} quantity - 要歸還的數量
+ */
+async function returnStock(client, bomId, quantity) {
+    if (quantity <= 0) return;
+    // 簡單地將歸還的庫存作為一筆新的入庫紀錄
+    await client.query(
+        "INSERT INTO inventory (bom_id, stock_in_qty, remaining_qty, stock_in_time) VALUES ($1, $2, $2, NOW())",
+        [bomId, quantity]
+    );
+}
+
 export {
   getStockByBomId,
   getBoms,
@@ -286,4 +337,6 @@ export {
   createBom,
   updateBom,
   updateBoms,
+  deductStock,
+  returnStock,
 };

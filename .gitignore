@@ -1,4 +1,5 @@
 upload/
+cache/*
 temp_output/
 *.env
 # compiled output

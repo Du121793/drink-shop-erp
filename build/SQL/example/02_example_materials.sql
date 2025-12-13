@@ -22,7 +22,9 @@ INSERT INTO bom (material_name, shelf_life_days) VALUES
 ('芋頭', 5),
 ('綠茶', 180);
 
-
+INSERT INTO bom (material_name, shelf_life_days) VALUES
+('方糖', 365),
+('芋圓', 30);
 -- Step 3: Link products to their materials to create a recipe (material_product).
 -- We assume product_id's are 1-6 from 'example_products.sql' and bom_id's are 1-15 from above.
 

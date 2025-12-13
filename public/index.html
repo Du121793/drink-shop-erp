@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>待處理訂單 QR Code</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f9; color: #333; }
+        h1 { text-align: center; color: #444; }
+        #main-container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px;}
+        .request-group { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .request-group h2 { font-size: 1.2em; color: #555; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0;}
+        .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .qr-item { text-align: center; padding: 10px; border: 1px solid #eee; border-radius: 4px; }
+        .qr-item img { max-width: 100%; height: auto; display: block; margin-bottom: 10px; }
+        .qr-item p { font-size: 0.9em; margin: 0; word-break: break-all; }
+        .qr-actions { display: flex; justify-content: space-around; margin-top: 10px; }
+        .qr-actions button { padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .qr-actions .complete-btn { background-color: #28a745; color: white; }
+        .qr-actions .cancel-btn { background-color: #dc3545; color: white; }
+        #error-log { color: #d8000c; background-color: #ffbaba; border: 1px solid #d8000c; padding: 10px; margin-top: 20px; border-radius: 5px; }
+        #loading { text-align: center; font-size: 1.5em; padding: 20px; }
+    </style>
+</head>
+<body>
+    <h1>待處理訂單 QR Code</h1>
+    <div id="main-container">
+        <div id="loading">讀取中...</div>
+        <div id="requests-container"></div>
+    </div>
+    <div id="error-log" style="display:none;"></div>
+
+    <script>
+        const requestsContainer = document.getElementById('requests-container');
+        const errorLog = document.getElementById('error-log');
+        const loadingDiv = document.getElementById('loading');
+
+        async function updateOrderStatus(detailId, status, requestUUID) {
+            try {
+                const response = await fetch(`/order/${detailId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: status, requestUUID: requestUUID })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.msg || `更新訂單狀態失敗 (狀態碼: ${response.status})`);
+                }
+
+                console.log(`訂單 ${detailId} 狀態更新成功為: ${status}`);
+                fetchAndDisplayQRCodes(); // 刷新列表
+
+            } catch (error) {
+                console.error('更新訂單狀態失敗:', error);
+                errorLog.textContent = `錯誤: ${error.message}`;
+                errorLog.style.display = 'block';
+            }
+        }
+
+        async function fetchAndDisplayQRCodes() {
+            try {
+                const response = await fetch('/order/cache');
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤! 狀態: ${response.status}`);
+                }
+                const requests = await response.json();
+                
+                loadingDiv.style.display = 'none';
+                requestsContainer.innerHTML = ''; // 清空現有內容
+
+                if (requests.length === 0) {
+                    requestsContainer.innerHTML = '<p>目前沒有待處理的訂單。</p>';
+                }
+
+                for (const request of requests) {
+                    const requestDiv = document.createElement('div');
+                    requestDiv.className = 'request-group';
+
+                    const title = document.createElement('h2');
+                    title.textContent = `訂單請求 UUID: ${request.requestUUID}`;
+                    requestDiv.appendChild(title);
+
+                    const qrGrid = document.createElement('div');
+                    qrGrid.className = 'qr-grid';
+
+                    for (const item of request.qrcodes) {
+                        const qrItemDiv = document.createElement('div');
+                        qrItemDiv.className = 'qr-item';
+
+                        const img = document.createElement('img');
+                        img.src = item.qrcode;
+                        img.alt = `QR Code for detailId ${item.detailId}`;
+                        
+                        const text = document.createElement('p');
+                        text.textContent = `明細ID: ${item.detailId}`;
+                        
+                        // New buttons
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.className = 'qr-actions';
+
+                        const completeButton = document.createElement('button');
+                        completeButton.className = 'complete-btn';
+                        completeButton.textContent = '完成';
+                        completeButton.onclick = () => updateOrderStatus(item.detailId, true, request.requestUUID);
+
+                        const cancelButton = document.createElement('button');
+                        cancelButton.className = 'cancel-btn';
+                        cancelButton.textContent = '取消';
+                        cancelButton.onclick = () => updateOrderStatus(item.detailId, false, request.requestUUID);
+
+                        actionsDiv.appendChild(completeButton);
+                        actionsDiv.appendChild(cancelButton);
+
+                        qrItemDiv.appendChild(img);
+                        qrItemDiv.appendChild(text);
+                        qrItemDiv.appendChild(actionsDiv); // Append buttons
+                        qrGrid.appendChild(qrItemDiv);
+                    }
+                    requestDiv.appendChild(qrGrid);
+                    requestsContainer.appendChild(requestDiv);
+                }
+
+                errorLog.style.display = 'none';
+            } catch (error) {
+                console.error('獲取 QR Code 失敗:', error);
+                errorLog.textContent = `錯誤: ${error.message}`;
+                errorLog.style.display = 'block';
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        // 立即執行一次，然後每秒執行一次
+        fetchAndDisplayQRCodes();
+        setInterval(fetchAndDisplayQRCodes, 1000);
+    </script>
+</body>
+</html>

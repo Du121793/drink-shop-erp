@@ -37,31 +37,124 @@ async function handleEvent(event) {
   }
 
   const lineUserId = event?.source?.userId;
-
   const text = event.message.text;
 
-  let replyText;
-  if (text === "確認庫存") replyText = await handleInventory();
-  else if (text === "指令")
-    replyText = "可用指令：確認庫存 / 自動進貨 / 補貨 / 指令";
-  else if (text === "自動進貨") replyText = await handleRestockList();
-  else if (text === "補貨") replyText = await handleRestock();
-  else if (text === "菜單") replyText = await handleMenu();
-  else if (text === "權限註冊") replyText = await handleRegister(lineUserId);
-  else replyText = "輸入「指令」以確認可用命令";
+  let message;
+
+  if (text === "指令") {
+    message = await handleCommandList();
+  } else if (text === "菜單") {
+    message = await handleMenu();
+  } else {
+    let replyText;
+    if (text === "確認庫存") replyText = await handleInventory();
+    else if (text === "自動進貨") replyText = await handleRestockList();
+    else if (text === "補貨") replyText = await handleRestock();
+    else if (text === "權限註冊") replyText = await handleRegister(lineUserId);
+    else replyText = "輸入「指令」以確認可用命令";
+    message = {
+      type: "text",
+      text: replyText,
+    };
+  }
 
   return client.replyMessage({
     replyToken: event.replyToken,
-    messages: [
-      {
-        type: "text",
-        text: replyText,
-      },
-    ],
+    messages: [message],
   });
 }
 
 // 以下全部都是針對於每個事件做出的反應
+
+async function handleCommandList() {
+  return {
+    type: "flex",
+    altText: "指令選單",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "指令選單",
+            weight: "bold",
+            size: "xl",
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "請選擇您需要的服務：",
+            wrap: true,
+          },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            color: "#905c44",
+            action: {
+              type: "message",
+              label: "確認庫存",
+              text: "確認庫存",
+            },
+          },
+          {
+            type: "button",
+            style: "primary",
+            color: "#905c44",
+            action: {
+              type: "message",
+              label: "自動進貨",
+              text: "自動進貨",
+            },
+          },
+          {
+            type: "button",
+            style: "primary",
+            color: "#905c44",
+            action: {
+              type: "message",
+              label: "補貨",
+              text: "補貨",
+            },
+          },
+          {
+            type: "button",
+            style: "primary",
+            color: "#905c44",
+            action: {
+              type: "message",
+              label: "菜單",
+              text: "菜單",
+            },
+          },
+          {
+            type: "button",
+            style: "secondary",
+            action: {
+              type: "message",
+              label: "權限註冊",
+              text: "權限註冊",
+            },
+          },
+        ],
+        flex: 0,
+      },
+    },
+  };
+}
 
 async function handleInventory() {
   return "歡迎來到庫存選項";
@@ -78,7 +171,119 @@ async function handleRestock() {
 }
 
 async function handleMenu() {
-  return JSON.stringify(await menuController.getMenus());
+  const menuItems = await menuController.getMenus();
+
+  if (menuItems.length === 0) {
+    return {
+      type: "text",
+      text: "目前沒有可顯示的菜單項目。",
+    };
+  }
+
+  const bubbles = menuItems.map((item) => {
+    const bubble = {
+      type: "bubble",
+      size: "micro",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: item.name,
+            weight: "bold",
+            size: "md",
+            wrap: true,
+          },
+        ],
+        paddingBottom: "none",
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        contents: [
+          {
+            type: "box",
+            layout: "baseline",
+            spacing: "sm",
+            contents: [
+              {
+                type: "text",
+                text: "價格",
+                color: "#aaaaaa",
+                size: "sm",
+                flex: 2,
+              },
+              {
+                type: "text",
+                text: `$${item.price}`,
+                wrap: true,
+                color: "#666666",
+                size: "sm",
+                flex: 5,
+              },
+            ],
+          },
+          {
+            type: "box",
+            layout: "baseline",
+            spacing: "sm",
+            contents: [
+              {
+                type: "text",
+                text: "狀態",
+                color: "#aaaaaa",
+                size: "sm",
+                flex: 2,
+              },
+              {
+                type: "text",
+                text: item.isAvailable ? "可供應" : "已售完",
+                wrap: true,
+                color: item.isAvailable ? "#1DB446" : "#FF6B6E",
+                size: "sm",
+                flex: 5,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    if (item.isAvailable) {
+      bubble.footer = {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            height: "sm",
+            action: {
+              type: "message",
+              label: "查看選項",
+              text: `查看選項 ${item.id}`,
+            },
+            color: "#905c44",
+          },
+        ],
+        flex: 0,
+      };
+    }
+
+    return bubble;
+  });
+
+  return {
+    type: "flex",
+    altText: "這是我們的菜單",
+    contents: {
+      type: "carousel",
+      contents: bubbles,
+    },
+  };
 }
 
 async function handleRegister(lineUserId) {

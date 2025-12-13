@@ -99,6 +99,27 @@ body {
   background-color: #fafafa;
 }
 
+/* 無法點擊的卡片 */
+.product-card.unavailable {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+  opacity: 0.6;
+  position: relative;
+}
+
+/* 缺貨標籤 */
+.out-of-stock-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #6c757d;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
 /* 產品文字資訊 */
 .product-info {
   flex: 1;
@@ -262,6 +283,15 @@ body {
   box-shadow: 0 4px 10px rgba(211, 84, 0, 0.3);
 }
 
+/* 無法點擊的選項 */
+.choice-chip.unavailable {
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
 /* =========================================
    6. 底部按鈕 (Footer)
    ========================================= */
@@ -287,4 +317,163 @@ body {
 
 .submit-btn:active {
   transform: scale(0.98);
+}
+
+/* =========================================
+   7. 購物車 (Shopping Cart)
+   ========================================= */
+
+.cart-container {
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.cart-title {
+  margin: 0 0 15px 0;
+  font-size: 1.3rem;
+  color: #343a40;
+}
+
+.cart-empty-text {
+  text-align: center;
+  color: #6c757d;
+  padding: 20px 0;
+}
+
+.cart-item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px; /* Vertical padding, added horizontal padding */
+  border-bottom: 1px solid #e9ecef;
+}
+
+.cart-item:last-child {
+  border-bottom: none;
+}
+
+.cart-item-info {
+  flex: 1;
+  margin-right: 10px;
+}
+
+.cart-item-name {
+  font-weight: 600;
+  color: #495057;
+}
+
+.cart-item-options {
+  font-size: 0.85em;
+  color: #6c757d;
+  margin-top: 4px;
+}
+
+.cart-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.cart-item-price {
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+/* 模態框中的產品價格 */
+.remove-item-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.cart-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.place-order-btn {
+  width: 100%;
+  margin-top: 15px;
+  padding: 14px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.place-order-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.cart-error {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.cart-success {
+  color: #28a745;
+  font-weight: bold;
+  word-break: break-all;
+}
+
+.modal-product-price {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    font-weight: bold;
+    margin: 0 0 20px 0;
+}
+
+.no-options-text {
+    color: #999;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.quantity-selector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 15px; /* 與下方按鈕的間距 */
+    gap: 10px;
+}
+
+.quantity-btn {
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
 }
