@@ -11,56 +11,52 @@ async function getMenus() {
   const client = await pool.connect();
 
   try {
-    const productsResult = await client.query(
-      "SELECT product_id, product_name, price FROM product WHERE is_active = TRUE ORDER BY product_id"
-    );
-    const products = productsResult.rows;
+    const query = `
+      WITH ProductBaseAvailability AS (
+        -- 針對每項產品的基礎原料，檢查庫存是否充足
+        SELECT
+          p.product_id,
+          mp.material_used_qty,
+          (
+            SELECT COALESCE(SUM(i.remaining_qty), 0)
+            FROM inventory i
+            JOIN bom b_sub ON i.bom_id = b_sub.bom_id
+            WHERE i.bom_id = mp.bom_id
+              AND (b_sub.shelf_life_days IS NULL OR (i.stock_in_time + (b_sub.shelf_life_days * INTERVAL '1 day')) >= NOW())
+          ) AS available_stock
+        FROM product p
+        JOIN material_product mp ON p.product_id = mp.product_id
+        WHERE p.is_active = TRUE
+      ),
+      ProductOverallAvailability AS (
+        -- 對於每個產品，判斷是否所有基礎原料都滿足
+        SELECT
+          pba.product_id,
+          BOOL_AND(pba.available_stock >= pba.material_used_qty) AS is_available
+        FROM ProductBaseAvailability pba
+        GROUP BY pba.product_id
+      )
+      -- 組合最終結果
+      SELECT
+        p.product_id,
+        p.product_name,
+        p.price,
+        COALESCE(poa.is_available, TRUE) AS "isAvailable" -- 如果產品沒有任何原料需求，則預設為可供應
+      FROM product p
+      LEFT JOIN ProductOverallAvailability poa ON p.product_id = poa.product_id
+      WHERE p.is_active = TRUE
+      ORDER BY p.product_id;
+    `;
 
-    if (products.length === 0) {
-      return [];
-    }
+    const result = await client.query(query);
+    // 將 isAvailable 欄位從 snake_case 轉換為 camelCase
+    return result.rows.map(row => ({
+      id: row.product_id,
+      name: row.product_name,
+      price: row.price,
+      isAvailable: row.isAvailable,
+    }));
 
-    const materialRequirementsResult = await client.query(
-      "SELECT product_id, bom_id, material_used_qty FROM material_product"
-    );
-
-    const requirementsByProduct = materialRequirementsResult.rows.reduce(
-      (acc, req) => {
-        if (!acc[req.product_id]) {
-          acc[req.product_id] = [];
-        }
-        acc[req.product_id].push({
-          bom_id: req.bom_id,
-          quantity: parseFloat(req.material_used_qty),
-        });
-        return acc;
-      },
-      {}
-    );
-
-    const menu = await Promise.all(
-      products.map(async (product) => {
-        const requirements = requirementsByProduct[product.product_id] || [];
-        let isAvailable = true;
-
-        for (const req of requirements) {
-          const stock = await getStockByBomId(req.bom_id);
-          if (stock < req.quantity) {
-            isAvailable = false;
-            break;
-          }
-        }
-
-        return {
-          id: product.product_id,
-          name: product.product_name,
-          price: product.price,
-          isAvailable: isAvailable,
-        };
-      })
-    );
-
-    return menu;
   } catch (error) {
     error.msg = "取得菜單列表時發生錯誤";
     logger.error(error, null, "getMenus");

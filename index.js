@@ -1,5 +1,8 @@
 import express from "express";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { startupCheck } from "./SQL_controller/index.js";
 import * as logger from "./methods/logger.js";
 import lineWebHook from "./routes/lineWebHook.js";
@@ -29,11 +32,24 @@ const SERVER_PORT = process.env.SERVER_PORT || 3000;
 
 app.listen(SERVER_PORT, () => {
   try {
-    logger.info("伺服器監聽成功，正在監聽 " + SERVER_PORT + " 端口");
-    logger.info("開始初始化工作");
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const cacheDir = path.join(__dirname, "cache");
+
+    logger.info("正在清除伺服器快取...", "Server");
+    if (fs.existsSync(cacheDir)) {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+      logger.info("快取目錄已刪除", "Server");
+    }
+    fs.mkdirSync(cacheDir, { recursive: true });
+    logger.info("已建立新的快取目錄", "Server");
+
+    logger.info("伺服器監聽成功，正在監聽 " + SERVER_PORT + " 端口", "Server");
+    logger.info("開始初始化工作", "Server");
     // 初始化資料庫
     startupCheck();
   } catch (e) {
     console.log("伺服器初始化失敗");
+    logger.error(e, null, "Server");
   }
 });

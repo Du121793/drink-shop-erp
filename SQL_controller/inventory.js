@@ -41,11 +41,11 @@ async function getAllStock() {
   const client = await pool.connect();
   try {
     const query = `
-      SELECT b.bom_id, b.material_name, SUM(i.remaining_qty) as total_stock
+      SELECT b.bom_id, b.material_name, b.max_stock_qty, SUM(i.remaining_qty) as total_stock
       FROM bom b
       LEFT JOIN inventory i ON b.bom_id = i.bom_id
       AND (b.shelf_life_days IS NULL OR (i.stock_in_time + (b.shelf_life_days * INTERVAL '1 day')) >= NOW())
-      GROUP BY b.bom_id, b.material_name
+      GROUP BY b.bom_id, b.material_name, b.max_stock_qty
       ORDER BY b.bom_id;
     `;
     const result = await client.query(query);
@@ -301,6 +301,11 @@ async function deductStock(client, bomId, amountToReduce) {
         "UPDATE inventory SET remaining_qty = remaining_qty - $1 WHERE inventory_id = $2",
         [reduction, stock.inventory_id]
       );
+      // 新增消耗紀錄
+      await client.query(
+        "INSERT INTO inventory_consumption_log (bom_id, quantity_consumed, reason) VALUES ($1, $2, 'Sale')",
+        [bomId, reduction]
+      );
       remainingToReduce -= reduction;
     }
 
@@ -318,6 +323,13 @@ async function deductStock(client, bomId, amountToReduce) {
  */
 async function returnStock(client, bomId, quantity) {
     if (quantity <= 0) return;
+    
+    // 記錄一筆負消耗，代表歸還
+    await client.query(
+        "INSERT INTO inventory_consumption_log (bom_id, quantity_consumed, reason) VALUES ($1, $2, 'Order Cancellation')",
+        [bomId, -quantity]
+    );
+
     // 簡單地將歸還的庫存作為一筆新的入庫紀錄
     await client.query(
         "INSERT INTO inventory (bom_id, stock_in_qty, remaining_qty, stock_in_time) VALUES ($1, $2, $2, NOW())",

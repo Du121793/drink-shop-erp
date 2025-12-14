@@ -6,7 +6,7 @@
 INSERT INTO custom_option (option_name) VALUES
 ('糖度'), -- Sugar Level, option_id = 1
 ('冰量'), -- Ice Level, option_id = 2
-('加料'); -- Add-ons, option_id = 3
+('加料');
 
 -- Step 2: Define the details for each option.
 -- Assumed bom_ids: 冰塊=6, 奶蓋粉=9, 粉紅珍珠=12, 方糖=16, 芋圓=17.
@@ -27,7 +27,7 @@ INSERT INTO option_detail (option_id, bom_id, option_detail_name, material_qty, 
 -- Details for '加料' (option_id = 3)
 INSERT INTO option_detail (option_id, bom_id, option_detail_name, material_qty, extra_price) VALUES
 (3, 9, '加奶蓋', 15, 15),
-(3, 17, '加芋圓', 20, 10),
+(3, 17, '加芋圓', 20, 10);
 
 -- Step 3: Map the options to the relevant products.
 -- Assumed product_ids are 1 through 6.
@@ -54,4 +54,4 @@ INSERT INTO product_option (product_id, option_id) VALUES
 (1, 3),
 (2, 3),
 (3, 3),
-(4, 3)
+(4, 3);

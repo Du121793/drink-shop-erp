@@ -80,16 +80,18 @@ async function createOrder(orderItems) {
       if (availableStock < requiredQty) {
         const err = new Error(`庫存不足: 原料ID ${bomId}`);
         // 找到是哪個產品導致的錯誤
-        const problemItem = orderItems.find(item => {
-            const reqs = flattenedItems.find(f => f.productId === item.menuId).requirements;
-            return reqs.has(bomId);
+        const problemItem = orderItems.find((item) => {
+          const reqs = flattenedItems.find(
+            (f) => f.productId === item.menuId
+          ).requirements;
+          return reqs.has(bomId);
         });
         err.productId = problemItem ? problemItem.menuId : null;
         err.isStockError = true;
         throw err;
       }
     }
-    
+
     // 3. 處理每個獨立訂單
     const processedItems = [];
     await client.query("BEGIN");
@@ -142,46 +144,65 @@ async function createOrder(orderItems) {
  * @param {boolean} status - true 代表完成, false 代表取消
  */
 async function updateOrderStatus(detailId, status) {
-    const pool = getPoolRW();
-    const client = await pool.connect();
+  const pool = getPoolRW();
+  const client = await pool.connect();
 
-    try {
-        await client.query("BEGIN");
-        if (status === true) {
-            // 完成訂單
-            await client.query("UPDATE sales_detail SET status = TRUE WHERE detail_id = $1", [detailId]);
-        } else {
-            // 取消訂單
-            // 1. 獲取訂單詳情
-            const orderRes = await client.query("SELECT product_id FROM sales_detail WHERE detail_id = $1", [detailId]);
-            if (orderRes.rows.length === 0) {
-                throw new Error(`找不到銷售明細ID: ${detailId}`);
-            }
-            const { product_id } = orderRes.rows[0];
+  try {
+    await client.query("BEGIN");
+    if (status === true) {
+      // 完成訂單
+      await client.query(
+        "UPDATE sales_detail SET status = TRUE WHERE detail_id = $1",
+        [detailId]
+      );
+    } else {
+      // 取消訂單
+      // 1. 獲取訂單詳情
+      const orderRes = await client.query(
+        "SELECT product_id FROM sales_detail WHERE detail_id = $1",
+        [detailId]
+      );
+      if (orderRes.rows.length === 0) {
+        logger.warn(
+          `嘗試取消一個不存在或已被取消的訂單，detailId: ${detailId}`,
+          "updateOrderStatus"
+        );
+        return;
+      }
+      const { product_id } = orderRes.rows[0];
 
-            const optionsRes = await client.query("SELECT option_detail_id FROM custom_sales_detail WHERE detail_id = $1", [detailId]);
-            const selectedOptionIds = optionsRes.rows.map(r => r.option_detail_id);
+      const optionsRes = await client.query(
+        "SELECT option_detail_id FROM custom_sales_detail WHERE detail_id = $1",
+        [detailId]
+      );
+      const selectedOptionIds = optionsRes.rows.map((r) => r.option_detail_id);
 
-            // 2. 計算物料需求
-            const requirements = await getMaterialRequirements(client, product_id, selectedOptionIds);
-            
-            // 3. 歸還庫存
-            for (const [bomId, qty] of requirements.entries()) {
-                await returnStock(client, bomId, qty);
-            }
-            
-            // 4. 刪除訂單 (ON DELETE CASCADE 會自動刪除 custom_sales_detail)
-            await client.query("DELETE FROM sales_detail WHERE detail_id = $1", [detailId]);
-        }
-        await client.query("COMMIT");
-    } catch (error) {
-        await client.query("ROLLBACK");
-        error.msg = error.msg || `更新訂單 #${detailId} 狀態失敗`;
-        logger.error(error, null, "updateOrderStatus");
-        throw error;
-    } finally {
-        client.release();
+      // 2. 計算物料需求
+      const requirements = await getMaterialRequirements(
+        client,
+        product_id,
+        selectedOptionIds
+      );
+
+      // 3. 歸還庫存、此部分不實做 目前的邏輯為取消都是由於庫存錯誤
+      // for (const [bomId, qty] of requirements.entries()) {
+      //     await returnStock(client, bomId, qty);
+      // }
+
+      // 4. 刪除訂單 (ON DELETE CASCADE 會自動刪除 custom_sales_detail)
+      await client.query("DELETE FROM sales_detail WHERE detail_id = $1", [
+        detailId,
+      ]);
     }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    error.msg = error.msg || `更新訂單 #${detailId} 狀態失敗`;
+    logger.error(error, null, "updateOrderStatus");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export { createOrder, updateOrderStatus };

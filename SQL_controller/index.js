@@ -2,3 +2,4 @@
 // 可以將特定常用方法在這裡集中匯出
 
 export * from "./db_connect.js";
+export * from "./suggestion.js";

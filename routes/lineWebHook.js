@@ -2,6 +2,9 @@ import express, { Route } from "express";
 import * as line from "@line/bot-sdk";
 import * as logger from "../methods/logger.js";
 import * as menuController from "../SQL_controller/menu.js";
+import * as inventoryController from "../SQL_controller/inventory.js";
+import * as suggestionController from "../SQL_controller/suggestion.js";
+import { calculateRestockSuggestions } from "../methods/suggestion_calculator.js";
 import * as JWTIssue from "../methods/JWT_issue.js";
 const router = express.Router();
 
@@ -45,23 +48,140 @@ async function handleEvent(event) {
     message = await handleCommandList();
   } else if (text === "菜單") {
     message = await handleMenu();
+  } else if (text === "確認庫存") {
+    message = await handleInventoryReport();
+  } else if (text === "自動進貨") {
+    message = await handleRestockList();
   } else {
     let replyText;
-    if (text === "確認庫存") replyText = await handleInventory();
-    else if (text === "自動進貨") replyText = await handleRestockList();
-    else if (text === "補貨") replyText = await handleRestock();
+    if (text === "補貨") replyText = await handleRestock();
     else if (text === "權限註冊") replyText = await handleRegister(lineUserId);
-    else replyText = "輸入「指令」以確認可用命令";
-    message = {
-      type: "text",
-      text: replyText,
-    };
+    else {
+      message = await handleCommandList();
+    }
+
+    if (replyText) {
+      message = {
+        type: "text",
+        text: replyText,
+      };
+    }
   }
 
   return client.replyMessage({
     replyToken: event.replyToken,
     messages: [message],
   });
+}
+
+async function handleInventoryReport() {
+  const stockData = await inventoryController.getAllStock();
+  const reportItems = stockData.filter((item) => item.max_stock_qty > 0);
+
+  if (reportItems.length === 0) {
+    return {
+      type: "text",
+      text: "目前沒有設定最大庫存量的品項可供報告。",
+    };
+  }
+
+  // LINE carousel has a limit of 12 bubbles.
+  const bubbles = reportItems.slice(0, 12).map((item) => {
+    const total_stock = item.total_stock;
+    const max_stock_qty = parseFloat(item.max_stock_qty);
+    const percentage =
+      max_stock_qty > 0 ? Math.round((total_stock / max_stock_qty) * 100) : 0;
+
+    let barColor = "#905c44"; // Default color
+    if (percentage < 20) {
+      barColor = "#FF6B6E"; // Red
+    } else if (percentage < 50) {
+      barColor = "#FFD166"; // Yellow
+    }
+
+    // Ensure percentage for width is between 0 and 100
+    const barWidth = Math.min(Math.max(percentage, 0), 100);
+
+    return {
+      type: "bubble",
+      size: "kilo",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: item.material_name,
+            weight: "bold",
+            size: "lg",
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "text",
+                text: "庫存量",
+                flex: 3,
+                size: "sm",
+                color: "#555555",
+              },
+              {
+                type: "text",
+                text: `${total_stock} / ${max_stock_qty}`,
+                flex: 7,
+                size: "sm",
+                align: "end",
+                color: "#111111",
+              },
+            ],
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            height: "20px",
+            backgroundColor: "#E0E0E0",
+            cornerRadius: "10px",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                height: "100%",
+                width: `${barWidth}%`,
+                backgroundColor: barColor,
+                cornerRadius: "10px",
+                contents: [{ type: "filler" }],
+              },
+            ],
+          },
+          {
+            type: "text",
+            text: `${percentage}%`,
+            size: "md",
+            weight: "bold",
+            align: "center",
+            color: barColor,
+          },
+        ],
+      },
+    };
+  });
+
+  return {
+    type: "flex",
+    altText: "這是一份庫存報告",
+    contents: {
+      type: "carousel",
+      contents: bubbles,
+    },
+  };
 }
 
 // 以下全部都是針對於每個事件做出的反應
@@ -156,14 +276,175 @@ async function handleCommandList() {
   };
 }
 
-async function handleInventory() {
-  return "歡迎來到庫存選項";
-}
-
 async function handleRestockList() {
-  return `歡迎來到自動進貨選項，以下為推薦的補貨清單
-  
-請點擊連結已做修改`;
+  const materialStats = await suggestionController.getMaterialStats();
+  const allSuggestions = calculateRestockSuggestions(materialStats, {
+    consumptionThresholdPercent: 0.15,
+    criticalStockPercent: 0.10,
+    safetyStockPercent: 0.25,
+  });
+
+  const toRestock = allSuggestions.filter(s => s.suggestion > 0);
+
+  if (toRestock.length === 0) {
+    return {
+      type: "flex",
+      altText: "無需補貨",
+      contents: {
+        type: "bubble",
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            {
+              type: "text",
+              text: "✅ 庫存充足",
+              weight: "bold",
+              size: "xl",
+              margin: "md",
+              align: "center",
+            },
+            {
+              type: "text",
+              text: "所有品項庫存水位良好，或近期消耗量低，無需補充。",
+              align: "center",
+              wrap: true,
+              margin: "md",
+              color: "#666666"
+            }
+          ]
+        }
+      }
+    };
+  }
+
+  const bubbles = toRestock.slice(0, 12).map(item => {
+    const reasonComponents = item.reasons.map(reason => ({
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        {
+          type: "icon",
+          url: reason.effect.includes('+') ? "https://i.imgur.com/7Q4B3zV.png" : "https://i.imgur.com/b2a4mS4.png", // Green up, Red down
+          size: "sm"
+        },
+        {
+          type: "text",
+          text: reason.text,
+          color: "#888888",
+          size: "sm",
+          flex: 4
+        },
+        {
+          type: "text",
+          text: reason.effect,
+          color: "#888888",
+          size: "sm",
+          align: "end",
+          flex: 2
+        }
+      ]
+    }));
+
+    return {
+      type: "bubble",
+      size: "giga",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: item.material_name,
+            weight: "bold",
+            size: "xl",
+          }
+        ]
+      },
+      hero: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "lg",
+        contents: [
+          {
+            type: "text",
+            text: "建議補充",
+            align: "center",
+            size: "lg",
+            color: "#555555"
+          },
+          {
+            type: "box",
+            layout: "baseline",
+            alignItems: "center",
+            justifyContent: "center",
+            contents: [
+              {
+                type: "text",
+                text: `${item.suggestion}`,
+                weight: "bold",
+                size: "4xl",
+                color: "#905c44"
+              },
+              {
+                type: "text",
+                text: "單位",
+                margin: "md",
+                size: "lg",
+                color: "#AAAAAA"
+              }
+            ]
+          }
+        ]
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        contents: [
+          {
+            type: "text",
+            text: "計算依據",
+            weight: "bold",
+            color: "#AAAAAA",
+            size: "sm"
+          },
+          {
+            type: "separator"
+          },
+          ...reasonComponents
+        ]
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "separator",
+            margin: "md"
+          },
+          {
+            type: "text",
+            text: `目前庫存: ${item.total_stock} / ${item.max_stock_qty}`,
+            align: "center",
+            margin: "md",
+            color: "#888888",
+            size: "sm"
+          }
+        ]
+      }
+    };
+  });
+
+  return {
+    type: "flex",
+    altText: "智能補貨建議清單",
+    contents: {
+      type: "carousel",
+      contents: bubbles
+    }
+  };
 }
 
 async function handleRestock() {
@@ -290,3 +571,4 @@ async function handleRegister(lineUserId) {
   return (await JWTIssue.issueRegToken(lineUserId)).toString();
 }
 export default router;
+
