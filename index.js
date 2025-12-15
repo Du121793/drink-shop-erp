@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
@@ -9,9 +10,12 @@ import lineWebHook from "./routes/lineWebHook.js";
 import menu from "./routes/menu.js";
 import inventory from "./routes/inventory.js";
 import order from "./routes/order.js";
+import { start as startCornJob } from "./corn/cleanup.js";
 
 const app = express();
 dotenv.config();
+
+app.use(cors());
 
 app.use("/line", lineWebHook);
 
@@ -48,6 +52,8 @@ app.listen(SERVER_PORT, () => {
     logger.info("開始初始化工作", "Server");
     // 初始化資料庫
     startupCheck();
+    // 啟動排程
+    startCornJob();
   } catch (e) {
     console.log("伺服器初始化失敗");
     logger.error(e, null, "Server");

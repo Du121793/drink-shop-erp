@@ -2,6 +2,8 @@ upload/
 cache/*
 temp_output/
 *.env
+.txt
+err.txt
 # compiled output
 /dist
 /tmp
