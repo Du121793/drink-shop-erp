@@ -10,12 +10,17 @@ import lineWebHook from "./routes/lineWebHook.js";
 import menu from "./routes/menu.js";
 import inventory from "./routes/inventory.js";
 import order from "./routes/order.js";
+import autoRestock from "./routes/autoRestock.js";
+import supplier from "./routes/supplier.js";
+import permissions from "./routes/permissions.js";
+import { passport as accessPassport } from "./config/passport.js";
 import { start as startCornJob } from "./corn/cleanup.js";
 
 const app = express();
 dotenv.config();
 
 app.use(cors());
+app.use(accessPassport.initialize());
 
 app.use("/line", lineWebHook);
 
@@ -27,6 +32,9 @@ app.use(express.urlencoded());
 app.use("/menu", menu);
 app.use("/inventory", inventory);
 app.use("/order", order);
+app.use("/autoRestock", autoRestock);
+app.use("/", supplier);
+app.use("/", permissions);
 
 app.get("/", (req, res) => {
   res.send("伺服器運行中");

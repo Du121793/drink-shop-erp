@@ -1,4 +1,7 @@
 DROP TABLE IF EXISTS
+  purchase_order_log,
+  material_supplier,
+  supplier,
   custom_sales_detail,
   sales_detail,
   product_option,
@@ -8,6 +11,9 @@ DROP TABLE IF EXISTS
   inventory,
   custom_option,
   product,
+  employee_role,
+  role,
+  employee,
   bom
 CASCADE;
 
@@ -176,6 +182,113 @@ CREATE TABLE inventory_consumption_log (
   reason VARCHAR(255) NOT NULL
 );
 
+-- 01_employee.sql
+CREATE TABLE IF NOT EXISTS employee (
+  line_id        VARCHAR(64) PRIMARY KEY,
+  employee_name  VARCHAR(100),                        -- 員工名稱（預設 line 名稱，可修改）
+  joined_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- 加入時間
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()   -- 修改時間
+);
+
+-- 02_role.sql  (身分表)
+CREATE TABLE IF NOT EXISTS role (
+  role_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, -- 身分_id
+  role_name        VARCHAR(100) NOT NULL,                           -- 職位名稱
+  permission_level SMALLINT NOT NULL DEFAULT 0,                     -- 權限等級
+  CONSTRAINT uq_role_name UNIQUE (role_name),
+  CONSTRAINT chk_permission_level_nonneg CHECK (permission_level >= 0)
+);
+
+-- 03_employee_role.sql  (員工-身分表)
+CREATE TABLE IF NOT EXISTS employee_role (
+  line_id   VARCHAR(64) NOT NULL,
+  role_id   BIGINT NOT NULL,
+  PRIMARY KEY (line_id, role_id),
+  CONSTRAINT fk_employee_role_employee
+    FOREIGN KEY (line_id) REFERENCES employee(line_id)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_employee_role_role
+    FOREIGN KEY (role_id) REFERENCES role(role_id)
+    ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_role_line_id ON employee_role(line_id);
+CREATE INDEX IF NOT EXISTS idx_employee_role_role_id ON employee_role(role_id);
+
+-- 13_supplier.sql（原料廠商聯絡表）
+CREATE TABLE IF NOT EXISTS supplier (
+  supplier_id   INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  supplier_name VARCHAR(100) NOT NULL,
+  email         VARCHAR(254),  -- 可為 NULL（也可以和 phone 都為空）
+  phone         VARCHAR(30),   -- 可為 NULL（也可以和 email 都為空）
+  CONSTRAINT uq_supplier_name UNIQUE (supplier_name)
+);
+
+
+-- 14_material_supplier.sql（原料-廠商表）
+CREATE TABLE IF NOT EXISTS material_supplier (
+  supplier_id INTEGER NOT NULL,
+  bom_id      INTEGER NOT NULL,
+  is_default  BOOLEAN NOT NULL DEFAULT FALSE, -- 預設廠商？
+
+  PRIMARY KEY (supplier_id, bom_id),
+
+  CONSTRAINT fk_material_supplier_supplier
+    FOREIGN KEY (supplier_id)
+    REFERENCES supplier (supplier_id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+
+  CONSTRAINT fk_material_supplier_bom
+    FOREIGN KEY (bom_id)
+    REFERENCES bom (bom_id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+);
+
+-- 每個原料最多 1 個預設廠商（允許沒有預設）
+CREATE UNIQUE INDEX IF NOT EXISTS uq_material_supplier_default_per_bom
+ON material_supplier (bom_id)
+WHERE is_default = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_material_supplier_bom_id
+ON material_supplier (bom_id);
+
+CREATE INDEX IF NOT EXISTS idx_material_supplier_supplier_id
+ON material_supplier (supplier_id);
+
+CREATE TABLE IF NOT EXISTS purchase_order_log (
+  order_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  supplier_id  INTEGER NOT NULL,                   -- 1 筆叫貨紀錄對 1 個廠商
+  bom_id       INTEGER NOT NULL,                   -- 叫哪個原料
+  order_qty    NUMERIC(10,2) NOT NULL,             -- 叫貨量
+  order_time   TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- 叫貨時間
+
+  order_status SMALLINT NOT NULL DEFAULT 0,        -- 左側新增欄位：0=已下單, 1=已到貨, 2=取消
+
+  CONSTRAINT chk_purchase_order_qty_pos
+    CHECK (order_qty > 0),
+
+  CONSTRAINT chk_purchase_order_status
+    CHECK (order_status IN (0,1,2)),
+
+  -- 確保這個廠商「真的有供應」這個原料
+  CONSTRAINT fk_purchase_order_material_supplier
+    FOREIGN KEY (supplier_id, bom_id)
+    REFERENCES material_supplier (supplier_id, bom_id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_order_log_supplier_id
+ON purchase_order_log (supplier_id);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_order_log_bom_id
+ON purchase_order_log (bom_id);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_order_log_order_time
+ON purchase_order_log (order_time);
+
 -- Example product inserts
 INSERT INTO product (product_name, price, is_active) VALUES
 ('泰式熱情泰國奶茶', 65, TRUE),
@@ -303,3 +416,34 @@ INSERT INTO product_option (product_id, option_id) VALUES
 (2, 3),
 (3, 3),
 (4, 3);
+
+-- n 筆廠商（supplier）
+INSERT INTO supplier (supplier_name, email, phone)
+SELECT
+  '廠商' || gs,
+  'vendor' || gs || '@example.com',
+  '09' || lpad((gs * 1234567 % 100000000)::text, 8, '0')
+FROM generate_series(1, 10) AS gs;
+
+
+-- n 筆「原料-廠商」關聯（material_supplier）
+-- 會從現有 bom 取前 n 筆來配對廠商（若 bom 不足 n 筆，則以 bom 實際筆數為準）
+WITH
+s AS (
+  SELECT supplier_id, row_number() OVER (ORDER BY supplier_id) AS rn, count(*) OVER () AS cnt
+  FROM supplier
+),
+b AS (
+  SELECT bom_id, row_number() OVER (ORDER BY bom_id) AS rn
+  FROM bom
+  ORDER BY bom_id
+  LIMIT 10
+)
+INSERT INTO material_supplier (supplier_id, bom_id)
+SELECT
+  s.supplier_id,
+  b.bom_id
+FROM b
+JOIN s
+  ON s.rn = ((b.rn - 1) % s.cnt) + 1
+ON CONFLICT (supplier_id, bom_id) DO NOTHING;

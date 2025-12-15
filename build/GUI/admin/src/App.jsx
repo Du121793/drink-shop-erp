@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Link as RouterLink } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link as RouterLink, Navigate } from 'react-router-dom';
 import { Box, Drawer, AppBar, Toolbar, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, createTheme, ThemeProvider, Collapse } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
@@ -10,17 +10,23 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import FastfoodIcon from '@mui/icons-material/Fastfood';
 import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import CategoryIcon from '@mui/icons-material/Category';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
+import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
+import BusinessIcon from '@mui/icons-material/Business';
 
 import Dashboard from './pages/Dashboard';
 import EmployeePermissions from './pages/EmployeePermissions';
 import MenuManagement from './pages/MenuManagement'; // 父路由容器
-import Inventory from './pages/Inventory';
+import Restock from './pages/Restock';
+import RestockSuggestions from './pages/RestockSuggestions';
+import PurchaseOrderLog from './pages/PurchaseOrderLog';
+import SupplierManagement from './pages/SupplierManagement';
 
-// 新的子頁面組件
+// 菜單管理子頁面
 import MenuItemManagement from './pages/MenuItemManagement';
 import CustomOptionManagement from './pages/CustomOptionManagement';
 import BomManagement from './pages/BomManagement';
-
 
 const drawerWidth = 240;
 
@@ -59,8 +65,9 @@ const lightTheme = createTheme({
 });
 
 const menuItems = [
-  { text: '儀表板', path: '/', icon: <DashboardIcon /> },
+  { key: 'dashboard', text: '儀表板', path: '/', icon: <DashboardIcon /> },
   { 
+    key: 'menu',
     text: '菜單管理', 
     icon: <RestaurantMenuIcon />, 
     children: [
@@ -69,15 +76,57 @@ const menuItems = [
       { text: '原料管理 (BOM)', path: '/menu/boms', icon: <CategoryIcon /> },
     ]
   },
-  { text: '員工權限', path: '/permissions', icon: <PeopleIcon /> },
-  { text: '庫存管理', path: '/inventory', icon: <InventoryIcon /> },
+  { 
+    key: 'inventory',
+    text: '庫存管理', 
+    icon: <InventoryIcon />, 
+    children: [
+      { text: '補貨', path: '/inventory/restock', icon: <LocalShippingIcon /> },
+      { text: '補貨建議清單', path: '/inventory/suggestions', icon: <LightbulbIcon /> },
+      { text: '叫貨紀錄', path: '/inventory/orders', icon: <HistoryEduIcon /> },
+      { text: '原料廠商管理', path: '/inventory/suppliers', icon: <BusinessIcon /> },
+    ]
+  },
+  { key: 'permissions', text: '員工權限', path: '/permissions', icon: <PeopleIcon /> },
 ];
 
 function App() {
-  const [openMenu, setOpenMenu] = React.useState(true); // 控制菜單管理的子選單展開/收合
+  const [openMenu, setOpenMenu] = React.useState(true); // 控制菜單管理子選單
+  const [openInventoryMenu, setOpenInventoryMenu] = React.useState(true); // 控制庫存管理子選單
 
-  const handleClickMenu = () => {
-    setOpenMenu(!openMenu);
+  const handleToggle = (key) => {
+    if (key === 'menu') {
+      setOpenMenu((prev) => !prev);
+    } else if (key === 'inventory') {
+      setOpenInventoryMenu((prev) => !prev);
+    }
+  };
+
+  const renderCollapse = (item) => {
+    const isMenuSection = item.key === 'menu';
+    const open = isMenuSection ? openMenu : openInventoryMenu;
+
+    return (
+      <React.Fragment key={item.key}>
+        <ListItemButton onClick={() => handleToggle(item.key)}>
+          <ListItemIcon>{item.icon}</ListItemIcon>
+          <ListItemText primary={item.text} />
+          {open ? <ExpandLess /> : <ExpandMore />}
+        </ListItemButton>
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {item.children.map((child) => (
+              <ListItem key={child.text} disablePadding sx={{ pl: 4 }}>
+                <ListItemButton component={RouterLink} to={child.path}>
+                  <ListItemIcon>{child.icon}</ListItemIcon>
+                  <ListItemText primary={child.text} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+      </React.Fragment>
+    );
   };
 
   return (
@@ -103,37 +152,19 @@ function App() {
             <Toolbar />
             <Box sx={{ overflow: 'auto' }}>
               <List>
-                {menuItems.map((item, index) => (
-                  item.children ? ( // 如果有子選單
-                    <React.Fragment key={item.text}>
-                      <ListItemButton onClick={handleClickMenu}>
-                        <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} />
-                        {openMenu ? <ExpandLess /> : <ExpandMore />}
-                      </ListItemButton>
-                      <Collapse in={openMenu} timeout="auto" unmountOnExit>
-                        <List component="div" disablePadding>
-                          {item.children.map((child) => (
-                            <ListItem key={child.text} disablePadding sx={{ pl: 4 }}>
-                              <ListItemButton component={RouterLink} to={child.path}>
-                                <ListItemIcon>{child.icon}</ListItemIcon>
-                                <ListItemText primary={child.text} />
-                              </ListItemButton>
-                            </ListItem>
-                          ))}
-                        </List>
-                      </Collapse>
-                    </React.Fragment>
-                  ) : ( // 沒有子選單的普通項目
-                    <ListItem key={item.text} disablePadding>
-                      <ListItemButton component={RouterLink} to={item.path}>
-                        <ListItemIcon>
-                          {item.icon}
-                        </ListItemIcon>
-                        <ListItemText primary={item.text} />
-                      </ListItemButton>
-                    </ListItem>
-                  )
+                {menuItems.map((item) => (
+                  item.children
+                    ? renderCollapse(item)
+                    : (
+                      <ListItem key={item.key} disablePadding>
+                        <ListItemButton component={RouterLink} to={item.path}>
+                          <ListItemIcon>
+                            {item.icon}
+                          </ListItemIcon>
+                          <ListItemText primary={item.text} />
+                        </ListItemButton>
+                      </ListItem>
+                    )
                 ))}
               </List>
             </Box>
@@ -142,13 +173,17 @@ function App() {
             <Toolbar /> {/* Toolbar 統一放在 main 內容區頂部 */}
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/menu" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><MenuManagement /></Box>}> {/* 新增 pt:2 */}
+              <Route path="/menu" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><MenuManagement /></Box>}>
                 <Route path="items" element={<MenuItemManagement />} />
                 <Route path="options" element={<CustomOptionManagement />} />
                 <Route path="boms" element={<BomManagement />} />
               </Route>
-              <Route path="/permissions" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><EmployeePermissions /></Box>} /> {/* 新增 pt:2 */}
-              <Route path="/inventory" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><Inventory /></Box>} /> {/* 新增 pt:2 */}
+              <Route path="/inventory" element={<Navigate to="/inventory/restock" replace />} />
+              <Route path="/inventory/restock" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><Restock /></Box>} />
+              <Route path="/inventory/suggestions" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><RestockSuggestions /></Box>} />
+              <Route path="/inventory/orders" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><PurchaseOrderLog /></Box>} />
+              <Route path="/inventory/suppliers" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><SupplierManagement /></Box>} />
+              <Route path="/permissions" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><EmployeePermissions /></Box>} />
             </Routes>
           </Box>
         </Box>

@@ -92,7 +92,7 @@ function stableSort(array, comparator) {
   return stabilizedThis.map((el) => el[0]);
 }
 
-function Inventory() {
+function Inventory({ title = '庫存管理與補貨建議', showRestockButton = true, filterFn = null }) {
   const [stock, setStock] = useState([]);
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState('asc');
@@ -150,9 +150,16 @@ function Inventory() {
     return 'success';
   }
   
+  const filteredStock = React.useMemo(() => {
+    if (typeof filterFn === 'function') {
+      return stock.filter(filterFn);
+    }
+    return stock;
+  }, [stock, filterFn]);
+
   const visibleRows = React.useMemo(
-    () => stableSort(stock, getComparator(order, orderBy)),
-    [order, orderBy, stock],
+    () => stableSort(filteredStock, getComparator(order, orderBy)),
+    [order, orderBy, filteredStock],
   );
 
   const handleHistoryClick = (item) => {
@@ -210,7 +217,7 @@ function Inventory() {
   return (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" gutterBottom>庫存管理與補貨建議</Typography>
+        <Typography variant="h4" gutterBottom>{title}</Typography>
         {/* 移除頂部 BOM 新增按鈕 */}
         {/* <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleBomEditClick()}>新增原料</Button> */}
       </Box>
@@ -248,19 +255,19 @@ function Inventory() {
                       variant="outlined" 
                       size="small"
                       onClick={() => handleHistoryClick(item)}
-                      sx={{ mr: 1 }}
+                      sx={{ mr: showRestockButton ? 1 : 0 }}
                     >
                       查看紀錄
                     </Button>
-                    {/* 移除編輯 BOM 按鈕 */}
-                    {/* <IconButton onClick={() => handleBomEditClick(item)} size="small" sx={{ mr: 1 }}><EditIcon /></IconButton> */}
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={() => handleRestockClick(item)}
-                    >
-                      補貨
-                    </Button>
+                    {showRestockButton && (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleRestockClick(item)}
+                      >
+                        補貨
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
