@@ -1,0 +1,9 @@
+VITE_GRAFANA_IFRAME_SRC="http://localhost:3000/goto/af7662fcsiwaoa?orgId=1"
+
+# LIFF 前端設定
+VITE_LIFF_ID="請填入 LIFF ID（如 2008554548-xxxxxx）"
+VITE_API_BASE_URL="http://localhost:4000"      # 本地開發可指向後端，正式請填 API 網域
+
+# 開發模式（避免跳轉 Line，僅本地測試用）
+VITE_LIFF_DEV_MODE="true"
+VITE_LIFF_DEV_TOKEN=replace_with_local_secret

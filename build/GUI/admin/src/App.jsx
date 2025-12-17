@@ -1,63 +1,92 @@
-import React from 'react';
-import { HashRouter as Router, Routes, Route, Link as RouterLink, Navigate } from 'react-router-dom';
-import { Box, Drawer, AppBar, Toolbar, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, createTheme, ThemeProvider, Collapse } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
-import PeopleIcon from '@mui/icons-material/People';
-import InventoryIcon from '@mui/icons-material/Inventory';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
-import FastfoodIcon from '@mui/icons-material/Fastfood';
-import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
-import CategoryIcon from '@mui/icons-material/Category';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
-import BusinessIcon from '@mui/icons-material/Business';
+import React from "react";
+import {
+  HashRouter as Router,
+  Routes,
+  Route,
+  Link as RouterLink,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import {
+  Box,
+  Drawer,
+  AppBar,
+  Toolbar,
+  Typography,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  CssBaseline,
+  createTheme,
+  ThemeProvider,
+  Collapse,
+  Button,
+  Paper,
+} from "@mui/material";
+import liff from "@line/liff";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import PeopleIcon from "@mui/icons-material/People";
+import InventoryIcon from "@mui/icons-material/Inventory";
+import ExpandLess from "@mui/icons-material/ExpandLess";
+import ExpandMore from "@mui/icons-material/ExpandMore";
+import FastfoodIcon from "@mui/icons-material/Fastfood";
+import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
+import CategoryIcon from "@mui/icons-material/Category";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import LightbulbIcon from "@mui/icons-material/Lightbulb";
+import HistoryEduIcon from "@mui/icons-material/HistoryEdu";
+import BusinessIcon from "@mui/icons-material/Business";
+import { useLiffInit } from "./hooks/useLiff";
+import api, { isTokenExpired } from "./api/axios";
 
-import Dashboard from './pages/Dashboard';
-import EmployeePermissions from './pages/EmployeePermissions';
-import MenuManagement from './pages/MenuManagement'; // 父路由容器
-import Restock from './pages/Restock';
-import RestockSuggestions from './pages/RestockSuggestions';
-import PurchaseOrderLog from './pages/PurchaseOrderLog';
-import SupplierManagement from './pages/SupplierManagement';
-
-// 菜單管理子頁面
-import MenuItemManagement from './pages/MenuItemManagement';
-import CustomOptionManagement from './pages/CustomOptionManagement';
-import BomManagement from './pages/BomManagement';
+import Dashboard from "./pages/Dashboard";
+import PermissionsLayout from "./pages/PermissionsLayout";
+import PermissionsProfile from "./pages/PermissionsProfile";
+import PermissionsManage from "./pages/PermissionsManage";
+import MenuManagement from "./pages/MenuManagement";
+import Restock from "./pages/Restock";
+import RestockSuggestions from "./pages/RestockSuggestions";
+import PurchaseOrderLog from "./pages/PurchaseOrderLog";
+import SupplierManagement from "./pages/SupplierManagement";
+import MenuItemManagement from "./pages/MenuItemManagement";
+import CustomOptionManagement from "./pages/CustomOptionManagement";
+import BomManagement from "./pages/BomManagement";
+import NoPermission from "./pages/NoPermission";
 
 const drawerWidth = 240;
 
 const lightTheme = createTheme({
   palette: {
-    mode: 'light',
+    mode: "light",
     primary: {
-      main: '#d35400',
+      main: "#d35400",
     },
     background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
+      default: "#f5f5f5",
+      paper: "#ffffff",
     },
     text: {
-      primary: '#333',
-      secondary: '#555',
+      primary: "#333",
+      secondary: "#555",
     },
   },
   components: {
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: '#ffffff',
-          color: '#333',
+          backgroundColor: "#ffffff",
+          color: "#333",
         },
       },
     },
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#ffffff',
+          backgroundColor: "#ffffff",
         },
       },
     },
@@ -65,45 +94,236 @@ const lightTheme = createTheme({
 });
 
 const menuItems = [
-  { key: 'dashboard', text: '儀表板', path: '/', icon: <DashboardIcon /> },
-  { 
-    key: 'menu',
-    text: '菜單管理', 
-    icon: <RestaurantMenuIcon />, 
+  { key: "dashboard", text: "儀表板", path: "/", icon: <DashboardIcon />, minLevel: 2 },
+  {
+    key: "menu",
+    text: "菜單管理",
+    icon: <RestaurantMenuIcon />,
+    minLevel: 3,
     children: [
-      { text: '品項管理', path: '/menu/items', icon: <FastfoodIcon /> },
-      { text: '客製化選項管理', path: '/menu/options', icon: <SettingsSuggestIcon /> },
-      { text: '原料管理 (BOM)', path: '/menu/boms', icon: <CategoryIcon /> },
-    ]
+      { text: "品項管理", path: "/menu/items", icon: <FastfoodIcon />, minLevel: 3 },
+      { text: "客製化選項管理", path: "/menu/options", icon: <SettingsSuggestIcon />, minLevel: 3 },
+      { text: "配方管理 (BOM)", path: "/menu/boms", icon: <CategoryIcon />, minLevel: 3 },
+    ],
   },
-  { 
-    key: 'inventory',
-    text: '庫存管理', 
-    icon: <InventoryIcon />, 
+  {
+    key: "inventory",
+    text: "庫存管理",
+    icon: <InventoryIcon />,
+    minLevel: 1,
     children: [
-      { text: '補貨', path: '/inventory/restock', icon: <LocalShippingIcon /> },
-      { text: '補貨建議清單', path: '/inventory/suggestions', icon: <LightbulbIcon /> },
-      { text: '叫貨紀錄', path: '/inventory/orders', icon: <HistoryEduIcon /> },
-      { text: '原料廠商管理', path: '/inventory/suppliers', icon: <BusinessIcon /> },
-    ]
+      { text: "補貨", path: "/inventory/restock", icon: <LocalShippingIcon />, minLevel: 1 },
+      { text: "補貨建議清單", path: "/inventory/suggestions", icon: <LightbulbIcon />, minLevel: 1 },
+      { text: "叫貨紀錄", path: "/inventory/orders", icon: <HistoryEduIcon />, minLevel: 1 },
+      { text: "供應商管理", path: "/inventory/suppliers", icon: <BusinessIcon />, minLevel: 3 },
+    ],
   },
-  { key: 'permissions', text: '員工權限', path: '/permissions', icon: <PeopleIcon /> },
+  {
+    key: "permissions",
+    text: "員工權限",
+    icon: <PeopleIcon />,
+    minLevel: 1,
+    children: [
+      { text: "個人資料", path: "/permissions/profile", icon: <PeopleIcon />, minLevel: 1 },
+      { text: "管理員工", path: "/permissions/manage", icon: <PeopleIcon />, minLevel: 5 },
+    ],
+  },
 ];
 
+function ProtectedRoute({ minLevel = 0, permissionLevel, permissionLoading, children }) {
+  if (permissionLoading) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          height: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "background.default",
+          p: 2,
+        }}
+      >
+        <Paper sx={{ p: 3, textAlign: "center" }}>
+          <Typography variant="h6" gutterBottom>
+            檢查權限中...
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            請稍候，我們正在驗證您的使用權限
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+  if (!permissionLoading && permissionLevel < minLevel) {
+    return <Navigate to="/no-permission" replace />;
+  }
+
+  return children;
+}
+
+function PermissionRedirector({ permissionLevel, permissionLoading }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  React.useEffect(() => {
+    if (permissionLoading) return;
+    if (location.pathname !== "/no-permission") return;
+
+    if (permissionLevel >= 2) {
+      navigate("/", { replace: true });
+    } else if (permissionLevel >= 1) {
+      navigate("/inventory/suggestions", { replace: true });
+    }
+  }, [permissionLevel, permissionLoading, location.pathname, navigate]);
+
+  return null;
+}
+
 function App() {
-  const [openMenu, setOpenMenu] = React.useState(true); // 控制菜單管理子選單
-  const [openInventoryMenu, setOpenInventoryMenu] = React.useState(true); // 控制庫存管理子選單
+  const { loading: liffLoading, error: liffError, profile, idToken } = useLiffInit();
+  const [openMenu, setOpenMenu] = React.useState(true);
+  const [openInventoryMenu, setOpenInventoryMenu] = React.useState(true);
+  const [userName, setUserName] = React.useState("");
+  const [backendToken, setBackendToken] = React.useState(null);
+  const [permissionLevel, setPermissionLevel] = React.useState(0);
+  const [permissionLoading, setPermissionLoading] = React.useState(true);
+  const [tokenAttempted, setTokenAttempted] = React.useState(false);
+
+  // 交換 LIFF ID Token -> 後端 JWT，並統一放到 axios header
+  React.useEffect(() => {
+    const exchangeToken = async () => {
+      if (!idToken || isTokenExpired(idToken)) {
+        setBackendToken(null);
+        setTokenAttempted(true);
+        localStorage.removeItem("api_token");
+        delete api.defaults.headers.common.Authorization;
+        if (idToken) {
+          try {
+            liff?.logout?.();
+          } catch {}
+          try {
+            liff?.login?.({ redirectUri: window.location.href });
+            return;
+          } catch {}
+        }
+        return;
+      }
+      setTokenAttempted(false);
+      try {
+        const res = await api.post(
+          "/liff",
+          {},
+          { headers: { Authorization: `Bearer ${idToken}` } }
+        );
+        const token = res.data?.token;
+        if (token && !isTokenExpired(token)) {
+          api.defaults.headers.common.Authorization = `Bearer ${token}`;
+          setBackendToken(token);
+          localStorage.setItem("api_token", token);
+        } else {
+          setBackendToken(null);
+          localStorage.removeItem("api_token");
+          delete api.defaults.headers.common.Authorization;
+        }
+      } catch (err) {
+        if (
+          err?.response?.status === 401 ||
+          `${err?.response?.data?.error || ""}`.toLowerCase().includes("expired")
+        ) {
+          try {
+            liff?.logout?.();
+          } catch {}
+          try {
+            liff?.login?.({ redirectUri: window.location.href });
+            return;
+          } catch {}
+        }
+        setBackendToken(null);
+        localStorage.removeItem("api_token");
+        delete api.defaults.headers.common.Authorization;
+      } finally {
+        setTokenAttempted(true);
+      }
+    };
+    exchangeToken();
+  }, [idToken]);
+
+  // 載入個人資料與權限等級
+  React.useEffect(() => {
+    const fetchMe = async () => {
+      if (!idToken) {
+        setPermissionLevel(0);
+        setPermissionLoading(false);
+        return;
+      }
+
+      if (!tokenAttempted) {
+        setPermissionLoading(true);
+        return;
+      }
+
+      if (!backendToken) {
+        setPermissionLevel(0);
+        setPermissionLoading(false);
+        return;
+      }
+
+      setPermissionLoading(true);
+      try {
+        const res = await api.get("/permissions/me");
+        const name = res.data?.employee?.employee_name;
+        if (name) {
+          setUserName(name);
+        } else if (profile?.displayName) {
+          setUserName(profile.displayName);
+          try {
+            await api.patch("/permissions/me", { employee_name: profile.displayName });
+          } catch (err) {
+            // ignore name sync failure
+          }
+        }
+        const rolesFromProfile = Array.isArray(res.data?.employee?.roles)
+          ? res.data.employee.roles
+          : [];
+
+        let level = Number(
+          res.data?.permission_level ?? res.data?.employee?.permission_level ?? 0
+        );
+        // 若後端未回傳權限等級但已有角色，嘗試自行計算最大權限值
+        if (level === 0 && rolesFromProfile.length > 0) {
+          try {
+            const rolesRes = await api.get("/permissions/roles");
+            const roleMap = rolesRes.data?.roles || [];
+            const matched = roleMap.filter((r) => rolesFromProfile.includes(r.role_id));
+            if (matched.length > 0) {
+              level = Math.max(...matched.map((r) => Number(r.permission_level || 0)));
+            }
+          } catch (err) {
+            // ignore, fallback to 0
+          }
+        }
+        setPermissionLevel(level);
+      } catch (e) {
+        if (profile?.displayName) setUserName(profile.displayName);
+        setPermissionLevel(0);
+      } finally {
+        setPermissionLoading(false);
+      }
+    };
+    fetchMe();
+  }, [profile, backendToken]);
 
   const handleToggle = (key) => {
-    if (key === 'menu') {
+    if (key === "menu") {
       setOpenMenu((prev) => !prev);
-    } else if (key === 'inventory') {
+    } else if (key === "inventory") {
       setOpenInventoryMenu((prev) => !prev);
     }
   };
 
   const renderCollapse = (item) => {
-    const isMenuSection = item.key === 'menu';
+    const isMenuSection = item.key === "menu";
     const open = isMenuSection ? openMenu : openInventoryMenu;
 
     return (
@@ -129,16 +349,133 @@ function App() {
     );
   };
 
+  const visibleMenuItems = React.useMemo(() => {
+    return menuItems
+      .map((item) => {
+        const minLevel = item.minLevel ?? 0;
+        if (item.children) {
+          const allowedChildren = item.children.filter(
+            (child) => permissionLevel >= (child.minLevel ?? minLevel)
+          );
+          if (permissionLevel < minLevel || allowedChildren.length === 0) return null;
+          return { ...item, children: allowedChildren };
+        }
+        if (permissionLevel < minLevel) return null;
+        return item;
+      })
+      .filter(Boolean);
+  }, [permissionLevel]);
+
+  const guard = (element, minLevel = 0) => (
+    <ProtectedRoute
+      minLevel={minLevel}
+      permissionLevel={permissionLevel}
+      permissionLoading={permissionLoading}
+    >
+      {element}
+    </ProtectedRoute>
+  );
+
+  if (liffLoading) {
+    return (
+      <ThemeProvider theme={lightTheme}>
+        <Box
+          sx={{
+            display: "flex",
+            height: "100vh",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: "background.default",
+            p: 2,
+          }}
+        >
+          <Paper sx={{ p: 3, textAlign: "center" }}>
+            <Typography variant="h6" gutterBottom>
+              LIFF 初始化中...
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              請稍候，請先在 Line 登入
+            </Typography>
+          </Paper>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  if (liffError) {
+    return (
+      <ThemeProvider theme={lightTheme}>
+        <Box
+          sx={{
+            display: "flex",
+            height: "100vh",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: "background.default",
+            p: 2,
+          }}
+        >
+          <Paper sx={{ p: 3, textAlign: "center" }}>
+            <Typography variant="h6" gutterBottom>
+              LIFF 初始化失敗
+            </Typography>
+            <Typography variant="body2" color="error.main" sx={{ mb: 2 }}>
+              {liffError}
+            </Typography>
+            <Button variant="contained" onClick={() => window.location.reload()}>
+              重新整理
+            </Button>
+          </Paper>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  if (permissionLoading) {
+    return (
+      <ThemeProvider theme={lightTheme}>
+        <Box
+          sx={{
+            display: "flex",
+            height: "100vh",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: "background.default",
+            p: 2,
+          }}
+        >
+          <Paper sx={{ p: 3, textAlign: "center" }}>
+            <Typography variant="h6" gutterBottom>
+              檢查權限中...
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              請稍候，我們正在驗證您的使用權限
+            </Typography>
+          </Paper>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={lightTheme}>
       <Router>
-        <Box sx={{ display: 'flex', height: '100vh' }}>
+        <PermissionRedirector
+          permissionLevel={permissionLevel}
+          permissionLoading={permissionLoading}
+        />
+        <Box sx={{ display: "flex", height: "100vh" }}>
           <CssBaseline />
           <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar>
               <Typography variant="h6" noWrap component="div">
                 管理後台
               </Typography>
+              {userName && (
+                <Typography variant="body1" sx={{ ml: 2, color: "text.secondary" }}>
+                  {userName}
+                </Typography>
+              )}
             </Toolbar>
           </AppBar>
           <Drawer
@@ -146,44 +483,116 @@ function App() {
             sx={{
               width: drawerWidth,
               flexShrink: 0,
-              [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' },
+              [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
             }}
           >
             <Toolbar />
-            <Box sx={{ overflow: 'auto' }}>
+            <Box sx={{ overflow: "auto" }}>
               <List>
-                {menuItems.map((item) => (
-                  item.children
-                    ? renderCollapse(item)
-                    : (
-                      <ListItem key={item.key} disablePadding>
-                        <ListItemButton component={RouterLink} to={item.path}>
-                          <ListItemIcon>
-                            {item.icon}
-                          </ListItemIcon>
-                          <ListItemText primary={item.text} />
-                        </ListItemButton>
-                      </ListItem>
-                    )
-                ))}
+                {visibleMenuItems.map((item) =>
+                  item.children ? (
+                    renderCollapse(item)
+                  ) : (
+                    <ListItem key={item.key} disablePadding>
+                      <ListItemButton component={RouterLink} to={item.path}>
+                        <ListItemIcon>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.text} />
+                      </ListItemButton>
+                    </ListItem>
+                  )
+                )}
               </List>
             </Box>
           </Drawer>
-          <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-            <Toolbar /> {/* Toolbar 統一放在 main 內容區頂部 */}
+          <Box component="main" sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+            <Toolbar />
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/menu" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><MenuManagement /></Box>}>
+              <Route
+                path="/"
+                element={
+                  permissionLevel >= 2
+                    ? guard(<Dashboard />, 2)
+                    : permissionLevel >= 1
+                    ? <Navigate to="/inventory/suggestions" replace />
+                    : <Navigate to="/no-permission" replace />
+                }
+              />
+              <Route path="/no-permission" element={<NoPermission />} />
+              <Route
+                path="/menu"
+                element={
+                  guard(
+                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                      <MenuManagement />
+                    </Box>,
+                    3
+                  )
+                }
+              >
                 <Route path="items" element={<MenuItemManagement />} />
                 <Route path="options" element={<CustomOptionManagement />} />
                 <Route path="boms" element={<BomManagement />} />
               </Route>
               <Route path="/inventory" element={<Navigate to="/inventory/restock" replace />} />
-              <Route path="/inventory/restock" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><Restock /></Box>} />
-              <Route path="/inventory/suggestions" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><RestockSuggestions /></Box>} />
-              <Route path="/inventory/orders" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><PurchaseOrderLog /></Box>} />
-              <Route path="/inventory/suppliers" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><SupplierManagement /></Box>} />
-              <Route path="/permissions" element={<Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}><EmployeePermissions /></Box>} />
+              <Route
+                path="/inventory/restock"
+                element={
+                  guard(
+                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                      <Restock />
+                    </Box>,
+                    1
+                  )
+                }
+              />
+              <Route
+                path="/inventory/suggestions"
+                element={
+                  guard(
+                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                      <RestockSuggestions />
+                    </Box>,
+                    1
+                  )
+                }
+              />
+              <Route
+                path="/inventory/orders"
+                element={
+                  guard(
+                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                      <PurchaseOrderLog />
+                    </Box>,
+                    1
+                  )
+                }
+              />
+              <Route
+                path="/inventory/suppliers"
+                element={
+                  guard(
+                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                      <SupplierManagement />
+                    </Box>,
+                    3
+                  )
+                }
+              />
+              <Route
+                path="/permissions"
+                element={
+                  guard(
+                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                      <PermissionsLayout />
+                    </Box>,
+                    1
+                  )
+                }
+              >
+                <Route index element={<Navigate to="/permissions/profile" replace />} />
+                <Route path="profile" element={guard(<PermissionsProfile />, 1)} />
+                <Route path="manage" element={guard(<PermissionsManage />, 5)} />
+              </Route>
             </Routes>
           </Box>
         </Box>

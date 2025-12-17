@@ -44,7 +44,7 @@ const MenuEditDialog = ({ open, onClose, onSave, item, customOptions }) => {
     if (item) {
       setName(item.name || '');
       setPrice(item.price || '');
-      setSelectedOptionIds(item.options ? item.options.map(opt => opt.optionId) : []);
+      setSelectedOptionIds(item.options ? item.options.map(opt => Number(opt.optionId)) : []);
       setBaseMaterials(item.baseMaterials || []);
     } else {
       setName('');
@@ -66,7 +66,8 @@ const MenuEditDialog = ({ open, onClose, onSave, item, customOptions }) => {
   
   const handleOptionChange = (event) => {
     const { target: { value } } = event;
-    setSelectedOptionIds(typeof value === 'string' ? value.split(',') : value);
+    const selectedValues = typeof value === 'string' ? value.split(',') : value;
+    setSelectedOptionIds(selectedValues.map(v => Number(v)));
   };
 
   const handleMaterialChange = (index, field, value) => {

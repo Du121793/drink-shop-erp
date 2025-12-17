@@ -24,19 +24,25 @@ import {
   deleteMenu,
   getMenuOptions,
   getMenuMaterials,
+  getAllCustomOptions,
 } from '../api/menu';
 import MenuEditDialog from '../components/MenuEditDialog';
 
 function MenuItemManagement() {
   const [menus, setMenus] = useState([]);
+  const [customOptions, setCustomOptions] = useState([]);
   
   const [isMenuEditDialogOpen, setMenuEditDialogOpen] = useState(false);
   const [editingMenuItem, setEditingMenuItem] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const menusRes = await getMenus();
+      const [menusRes, optionsRes] = await Promise.all([
+        getMenus(),
+        getAllCustomOptions(),
+      ]);
       setMenus(menusRes.data.menus);
+      setCustomOptions(optionsRes.data.options || []);
     } catch (error) {
       console.error('Failed to fetch menus:', error);
     }
@@ -160,9 +166,7 @@ function MenuItemManagement() {
           onClose={handleMenuDialogClose}
           onSave={handleSaveMenu}
           item={editingMenuItem}
-          // customOptions 將從外部獲取並傳入，因為 MenuItemManagement 不直接管理 customOptions
-          // 這意味著這個組件需要一個 prop 來接收 customOptions
-          customOptions={[]} // 暫時給空陣列，待父組件傳入
+          customOptions={customOptions}
         />
       )}
     </>

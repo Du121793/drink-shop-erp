@@ -1,0 +1,33 @@
+SERVER_URL = "http://localhost"
+SERVER_PORT="4000"
+SERVER_URL="https://your-domain.com"
+
+# JWT 金鑰（後端簽發/驗證）
+JWT_SECRET=replace_with_local_secret
+
+# LINE Bot Webhook 設定
+LINE_CHANNEL_SECRET=replace_with_local_secret
+LINE_CHANNEL_ACCESS_TOKEN=replace_with_local_secret
+LINE_ISSUE_JWT_TOKEN_SECRET=replace_with_local_secret
+
+# LIFF 設定
+LINE_LIFF_CHANNEL_ID="請填入 LIFF Channel ID"
+LINE_LIFF_CHANNEL_SECRET=replace_with_local_secret
+LINE_LIFF_URL="https://liff.line.me/xxxx-xxxx"   # 提供給前端的 LIFF URL
+
+# 可選：LIFF 假 Token（本地測試 /line/liff 時使用）
+LIFF_DEV_TOKEN=replace_with_local_secret
+
+# 選配：Line 權限註冊用的 JWT 金鑰（如有分開）
+LINE_ISSUE_JWT_TOKEN_SECRET=replace_with_local_secret
+
+# 資料庫連線
+DATABASE_URL="127.0.0.1"
+DATABASE_PORT_RW=5432
+DATABASE_PORT_RO=5432
+DATABASE_NAME="drink_shop"
+DATABASE_USER="dev"
+DATABASE_PASSWORD=replace_with_local_secret
+
+# 初始化模式（true 時註冊使用者會強制成管理員）
+INIT="false"

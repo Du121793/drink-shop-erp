@@ -3,6 +3,7 @@ import * as suggestionController from "../SQL_controller/suggestion.js";
 import { calculateRestockSuggestions } from "../methods/suggestion_calculator.js";
 import * as supplierController from "../SQL_controller/supplier.js";
 import * as logger from "../methods/logger.js";
+import { accessChecker } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ async function attachSuppliers(suggestions) {
 }
 
 // 取得自動補貨建議清單
-router.get("/", async (req, res) => {
+router.get("/", accessChecker(1), async (req, res) => {
   try {
     const suggestions = await buildSuggestions();
     const withSuppliers = await attachSuppliers(suggestions);
@@ -41,7 +42,7 @@ router.get("/", async (req, res) => {
 });
 
 // 套用手動調整的建議量，並附帶預設廠商
-router.patch("/", async (req, res) => {
+router.patch("/", accessChecker(1), async (req, res) => {
   try {
     const overrides = Array.isArray(req.body?.overrides) ? req.body.overrides : [];
     const suggestions = await buildSuggestions();

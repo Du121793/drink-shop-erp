@@ -1,10 +1,12 @@
 import express from "express";
 import * as logger from "../methods/logger.js";
 import * as menuController from "../SQL_controller/menu.js";
+import { accessChecker } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
+// 權限：查看菜單（權限等級 3 以上，或開發模式放行）
+router.get("/", accessChecker(3), async (req, res) => {
   try {
     const menus = await menuController.getMenus();
     res.status(200).json({ menus });
@@ -15,7 +17,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/option", async (req, res) => {
+router.get("/option", accessChecker(3), async (req, res) => {
   try {
     const options = await menuController.getAllCustomOptions();
     res.status(200).json({ options });
@@ -26,7 +28,7 @@ router.get("/option", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", accessChecker(3), async (req, res) => {
   try {
     const menuId = req.params.id;
     const options = await menuController.getOptionsByProductId(menuId);
@@ -38,7 +40,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.get("/:id/materials", async (req, res) => {
+router.get("/:id/materials", accessChecker(3), async (req, res) => {
   try {
     const menuId = req.params.id;
     const materials = await menuController.getBaseMaterialsByProductId(menuId);
@@ -50,7 +52,8 @@ router.get("/:id/materials", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+// 建立/修改/刪除菜單須權限 5
+router.post("/", accessChecker(3), async (req, res) => {
   try {
     const { name, price, optionIds, baseMaterials } = req.body;
     if (!name || !price) {
@@ -70,7 +73,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", accessChecker(3), async (req, res) => {
   try {
     const menuId = req.params.id;
     await menuController.updateMenu(menuId, req.body);
@@ -82,7 +85,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", accessChecker(3), async (req, res) => {
   try {
     const menuId = req.params.id;
     await menuController.deleteMenu(menuId);
@@ -94,7 +97,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.post("/option", async (req, res) => {
+router.post("/option", accessChecker(3), async (req, res) => {
   try {
     const { name, details } = req.body;
     if (!name || !details || !Array.isArray(details) || details.length === 0) {
@@ -109,7 +112,7 @@ router.post("/option", async (req, res) => {
   }
 });
 
-router.put("/option/:id", async (req, res) => {
+router.put("/option/:id", accessChecker(3), async (req, res) => {
   try {
     const optionId = req.params.id;
     const { name, details } = req.body;
@@ -125,7 +128,7 @@ router.put("/option/:id", async (req, res) => {
   }
 });
 
-router.delete("/option/:id", async (req, res) => {
+router.delete("/option/:id", accessChecker(3), async (req, res) => {
   try {
     const optionId = req.params.id;
     await menuController.deleteCustomOption(optionId);

@@ -4,6 +4,7 @@ temp_output/
 *.env
 .txt
 err.txt
+dist
 # compiled output
 /dist
 /tmp

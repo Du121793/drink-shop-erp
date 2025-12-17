@@ -6,7 +6,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { startupCheck } from "./SQL_controller/index.js";
 import * as logger from "./methods/logger.js";
-import lineWebHook from "./routes/lineWebHook.js";
+import lineRouter from "./routes/line/index.js";
+import liffRouter from "./routes/line/liff.js";
 import menu from "./routes/menu.js";
 import inventory from "./routes/inventory.js";
 import order from "./routes/order.js";
@@ -22,9 +23,12 @@ dotenv.config();
 app.use(cors());
 app.use(accessPassport.initialize());
 
-app.use("/line", lineWebHook);
+// Line 路由集中管理（webhook 使用 raw，需放在 body parser 之前）
+app.use("/line", lineRouter);
+// LIFF 交換端點（提供 /liff，與 /line/liff 併存）
+app.use("/liff", liffRouter);
 
-app.use(express.static('public'));
+app.use(express.static("public"));
 
 app.use(express.json());
 app.use(express.urlencoded());
