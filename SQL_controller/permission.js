@@ -154,6 +154,34 @@ async function updateEmployeeName(lineId, employeeName) {
   }
 }
 
+async function getEmployeesByPermissionLevel(minLevel = 0) {
+  const pool = getPoolRO();
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `
+      SELECT er.line_id, MAX(r.permission_level) AS permission_level
+      FROM employee_role er
+      JOIN role r ON r.role_id = er.role_id
+      GROUP BY er.line_id
+      HAVING MAX(r.permission_level) >= $1
+      ORDER BY MAX(r.permission_level) DESC, er.line_id;
+      `,
+      [minLevel]
+    );
+    return result.rows.map((row) => ({
+      line_id: row.line_id,
+      permission_level: parseInt(row.permission_level ?? 0, 10),
+    }));
+  } catch (error) {
+    error.msg = `查詢權限等級 >= ${minLevel} 的員工失敗`;
+    logger.error(error, null, "getEmployeesByPermissionLevel");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export {
   getRoles,
   createRole,
@@ -162,4 +190,5 @@ export {
   getEmployeesWithRoles,
   updateEmployeeName,
   getPermissionLevelByLineId,
+  getEmployeesByPermissionLevel,
 };

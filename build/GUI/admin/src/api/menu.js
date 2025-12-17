@@ -1,6 +1,7 @@
 import api from './axios';
 
-export const getMenus = () => api.get('/menu');
+export const getMenus = (includeInactive = false) =>
+  api.get('/menu', { params: includeInactive ? { all: true } : {} });
 export const getMenuOptions = (id) => api.get(`/menu/${id}`);
 export const getMenuMaterials = (id) => api.get(`/menu/${id}/materials`);
 export const getAllCustomOptions = () => api.get('/menu/option');

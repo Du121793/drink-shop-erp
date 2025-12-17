@@ -243,7 +243,11 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Box sx={{ width: '80%', mr: 1 }}>
-                        <LinearProgress variant="determinate" value={item.stock_level} color={getHealthColor(item.stock_level)} />
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(item.stock_level, 100)}
+                          color={getHealthColor(item.stock_level)}
+                        />
                       </Box>
                       <Box sx={{ minWidth: 35 }}>
                         <Typography variant="body2" color="text.secondary">{`${Math.round(item.stock_level)}%`}</Typography>

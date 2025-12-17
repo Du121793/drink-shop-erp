@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import Cart from "./components/Cart"; // 引入 Cart 元件
 import "./App.css";
 
+const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+const buildUrl = (path) => {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${normalized}` : normalized;
+};
+
 function App() {
   // ==========================================
   // 1. 狀態管理 (State Management)
@@ -34,7 +40,7 @@ function App() {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const response = await fetch("/menu");
+        const response = await fetch(buildUrl("/menu"));
         if (!response.ok) throw new Error("連線失敗");
         const data = await response.json();
         setMenu(data.menus || []);
@@ -55,7 +61,7 @@ function App() {
     setItemQuantity(1); // 重置數量
 
     try {
-      const response = await fetch(`/menu/${product.id}`);
+      const response = await fetch(buildUrl(`/menu/${product.id}`));
       const data = await response.json();
 
       if (data.options) {
@@ -206,7 +212,7 @@ function App() {
     }));
 
     try {
-      const response = await fetch("/order", {
+      const response = await fetch(buildUrl("/order"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderPayload),

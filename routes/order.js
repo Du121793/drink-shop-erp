@@ -5,19 +5,18 @@ import path from "path";
 import * as logger from "../methods/logger.js";
 import * as orderController from "../SQL_controller/order.js";
 import { generateQRCode } from "../methods/QR_code_generate.js";
-import { accessChecker } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 const cacheDir = path.resolve(process.cwd(), "cache");
 const cacheFile = path.join(cacheDir, "order.json");
 
-// 建立訂單：最低權限0（可下單）
+// 建立訂單：檢查上架與庫存，產生 QR 並寫入緩存
 router.post("/", async (req, res) => {
   const requestUUID = crypto.randomUUID();
   const orderItems = req.body;
 
   if (!Array.isArray(orderItems) || orderItems.length === 0) {
-    return res.status(400).json({ msg: "訂單格式錯誤，請提供品項陣列" });
+    return res.status(400).json({ msg: "訂單內容格式錯誤，請提供品項" });
   }
 
   try {
@@ -28,7 +27,7 @@ router.post("/", async (req, res) => {
       const payload = {
         productId: item.productId,
         detailId: item.detailId,
-        requestUUID: requestUUID,
+        requestUUID,
         materials: item.materialRequirements,
       };
       const qrCodeBase64 = await generateQRCode(payload);
@@ -38,16 +37,14 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 緩存處理
     let cacheData = [];
     try {
       const fileContent = await fs.readFile(cacheFile, "utf-8");
       cacheData = JSON.parse(fileContent);
     } catch (error) {
       if (error.code !== "ENOENT") {
-        throw error; // re-throw if it's not a "file not found" error
+        throw error;
       }
-      // 如果文件不存在，cacheData 保持為空陣列
     }
 
     cacheData.push({
@@ -56,6 +53,7 @@ router.post("/", async (req, res) => {
       qrcodes,
     });
 
+    await fs.mkdir(cacheDir, { recursive: true });
     await fs.writeFile(cacheFile, JSON.stringify(cacheData, null, 2));
 
     res.status(201).json({ requestUUID, qrcodes });
@@ -66,26 +64,35 @@ router.post("/", async (req, res) => {
         .status(400)
         .json({ msg: error.message, productId: error.productId });
     }
+    if (error.isActiveError) {
+      logger.warn(error.message, "OrderAPI", req.ip);
+      return res
+        .status(400)
+        .json({ msg: error.message, productId: error.productId });
+    }
     logger.error(error, req, "OrderAPI");
-    res.status(500).json({ msg: "創建訂單時發生內部錯誤" });
+    res.status(500).json({ msg: "建立訂單時發生內部錯誤" });
   }
 });
 
-// 更新訂單狀態：最低權限 0
+// 更新訂單狀態：status=true 完成；status=false 取消；refund=true 取消並退還庫存
 router.patch("/:detailId", async (req, res) => {
   const { detailId } = req.params;
-  const { status, requestUUID } = req.body;
+  const { status, requestUUID, refund } = req.body;
 
   if (typeof status !== "boolean" || !requestUUID) {
     return res
       .status(400)
-      .json({ msg: "請求格式錯誤，需要布林值的 status 和 requestUUID" });
+      .json({ msg: "請確認數據格式，缺少 status 或 requestUUID" });
   }
 
   try {
-    await orderController.updateOrderStatus(parseInt(detailId, 10), status);
+    await orderController.updateOrderStatus(
+      parseInt(detailId, 10),
+      status,
+      refund === true
+    );
 
-    // 更新緩存
     try {
       const fileContent = await fs.readFile(cacheFile, "utf-8");
       let cacheData = JSON.parse(fileContent);
@@ -95,12 +102,10 @@ router.patch("/:detailId", async (req, res) => {
       );
 
       if (requestIndex > -1) {
-        // 過濾掉已處理的 detailId
-        cacheData[requestIndex].qrcodes = cacheData[
-          requestIndex
-        ].qrcodes.filter((qr) => qr.detailId !== parseInt(detailId, 10));
+        cacheData[requestIndex].qrcodes = cacheData[requestIndex].qrcodes.filter(
+          (qr) => qr.detailId !== parseInt(detailId, 10)
+        );
 
-        // 如果 qrcodes 陣列為空，則移除整個 request 物件
         if (cacheData[requestIndex].qrcodes.length === 0) {
           cacheData.splice(requestIndex, 1);
         }
@@ -108,18 +113,74 @@ router.patch("/:detailId", async (req, res) => {
 
       await fs.writeFile(cacheFile, JSON.stringify(cacheData, null, 2));
     } catch (cacheError) {
-      // 如果緩存操作失敗，只記錄錯誤，不影響主流程
       logger.error(cacheError, req, "OrderCacheUpdate");
     }
 
     res.status(200).json({ msg: `訂單 #${detailId} 狀態已更新` });
   } catch (error) {
     logger.error(error, req, "OrderAPI");
-    res.status(500).json({ msg: "更新訂單時發生內部錯誤" });
+    res.status(500).json({ msg: "更新訂單狀態發生內部錯誤" });
   }
 });
 
-// 讀取訂單快取：最低權限 0
+// 重新下單（針對單一 detail，重檢庫存並生成新 QR）
+router.post("/reorder", async (req, res) => {
+  try {
+    const { detailId, requestUUID } = req.body;
+    if (!detailId || !requestUUID) {
+      return res.status(400).json({ msg: "缺少 detailId 或 requestUUID" });
+    }
+
+    const result = await orderController.reorderSingle(detailId);
+    const payload = {
+      productId: result.productId,
+      detailId: result.detailId,
+      requestUUID,
+      materials: result.materialRequirements,
+    };
+    const qrCodeBase64 = await generateQRCode(payload);
+
+    try {
+      const fileContent = await fs.readFile(cacheFile, "utf-8");
+      let cacheData = JSON.parse(fileContent);
+
+      const requestIndex = cacheData.findIndex(
+        (req) => req.requestUUID === requestUUID
+      );
+
+      if (requestIndex > -1) {
+        cacheData[requestIndex].qrcodes = cacheData[requestIndex].qrcodes.filter(
+          (qr) => qr.detailId !== Number(detailId)
+        );
+
+        cacheData[requestIndex].qrcodes.push({
+          detailId: result.detailId,
+          qrcode: qrCodeBase64,
+        });
+      }
+
+      await fs.writeFile(cacheFile, JSON.stringify(cacheData, null, 2));
+    } catch (cacheError) {
+      logger.error(cacheError, req, "OrderReorderCache");
+    }
+
+    res.status(201).json({
+      detailId: result.detailId,
+      qrcode: qrCodeBase64,
+      message: "重新下單完成",
+    });
+  } catch (error) {
+    if (error.isStockError || error.isActiveError) {
+      return res
+        .status(400)
+        .json({ msg: error.message, productId: error.productId });
+    }
+    logger.error(error, req, "OrderReorder");
+    res.status(500).json({ msg: "重新下單失敗" });
+  }
+});
+
+// 讀取緩存
 router.get("/cache", async (req, res) => {
   try {
     const fileContent = await fs.readFile(cacheFile, "utf-8");
@@ -127,11 +188,10 @@ router.get("/cache", async (req, res) => {
     res.status(200).json(cacheData);
   } catch (error) {
     if (error.code === "ENOENT") {
-      // 如果檔案不存在，回傳空陣列
       return res.status(200).json([]);
     }
     logger.error(error, req, "OrderCacheRead");
-    res.status(500).json({ msg: "讀取緩存時發生錯誤" });
+    res.status(500).json({ msg: "讀取緩存發生錯誤" });
   }
 });
 

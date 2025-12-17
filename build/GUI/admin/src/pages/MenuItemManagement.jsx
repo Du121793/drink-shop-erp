@@ -38,7 +38,7 @@ function MenuItemManagement() {
   const fetchData = useCallback(async () => {
     try {
       const [menusRes, optionsRes] = await Promise.all([
-        getMenus(),
+        getMenus(true),
         getAllCustomOptions(),
       ]);
       setMenus(menusRes.data.menus);

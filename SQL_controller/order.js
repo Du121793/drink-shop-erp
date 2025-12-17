@@ -2,17 +2,30 @@ import { getPoolRO, getPoolRW } from "./db_connect.js";
 import * as logger from "../methods/logger.js";
 import { getStockByBomId, deductStock, returnStock } from "./inventory.js";
 
+async function ensureProductsActive(client, productIds = []) {
+  if (!productIds.length) return;
+  const res = await client.query(
+    "SELECT product_id, is_active FROM product WHERE product_id = ANY($1::int[])",
+    [productIds]
+  );
+  const statusMap = new Map(res.rows.map((r) => [r.product_id, r.is_active === true]));
+  for (const pid of productIds) {
+    const active = statusMap.get(pid);
+    if (!active) {
+      const err = new Error(`商品 ${pid} 未上架，無法下單`);
+      err.isActiveError = true;
+      err.productId = pid;
+      throw err;
+    }
+  }
+}
+
 /**
- * 獲取產品及其選項所需的總物料
- * @param {object} client - pg client
- * @param {number} productId - 產品ID
- * @param {Array<number>} selectedOptionIds - 選擇的選項細節ID
- * @returns {Promise<Map<number, number>>} - Map of bom_id to quantity
+ * 查詢產品及其選項總需求量
  */
 async function getMaterialRequirements(client, productId, selectedOptionIds) {
   const requirements = new Map();
 
-  // 獲取基礎物料
   const baseRes = await client.query(
     "SELECT bom_id, material_used_qty FROM material_product WHERE product_id = $1",
     [productId]
@@ -22,7 +35,6 @@ async function getMaterialRequirements(client, productId, selectedOptionIds) {
     requirements.set(row.bom_id, (requirements.get(row.bom_id) || 0) + qty);
   }
 
-  // 獲取選項物料
   if (selectedOptionIds && selectedOptionIds.length > 0) {
     const optionsRes = await client.query(
       "SELECT bom_id, material_qty FROM option_detail WHERE option_detail_id = ANY($1::int[])",
@@ -38,16 +50,16 @@ async function getMaterialRequirements(client, productId, selectedOptionIds) {
 }
 
 /**
- * 創建訂單
- * @param {Array<object>} orderItems - 訂單項目陣列
- * @returns {Promise<Array<object>>} - 包含 detail_id, productId, 和 materialRequirements 的已處理項目陣列
+ * 建立訂單：先檢查上架狀態，再檢查庫存，再扣庫存建檔
  */
 async function createOrder(orderItems) {
   const pool = getPoolRW();
   const client = await pool.connect();
 
   try {
-    // 1. 扁平化訂單並計算總需求
+    const productIds = [...new Set(orderItems.map((o) => o.menuId))];
+    await ensureProductsActive(client, productIds);
+
     const flattenedItems = [];
     const totalRequirements = new Map();
 
@@ -74,12 +86,10 @@ async function createOrder(orderItems) {
       }
     }
 
-    // 2. 預先檢查庫存
     for (const [bomId, requiredQty] of totalRequirements.entries()) {
       const availableStock = await getStockByBomId(bomId);
       if (availableStock < requiredQty) {
-        const err = new Error(`庫存不足: 原料ID ${bomId}`);
-        // 找到是哪個產品導致的錯誤
+        const err = new Error(`庫存不足: 材料ID ${bomId}`);
         const problemItem = orderItems.find((item) => {
           const reqs = flattenedItems.find(
             (f) => f.productId === item.menuId
@@ -92,24 +102,20 @@ async function createOrder(orderItems) {
       }
     }
 
-    // 3. 處理每個獨立訂單
     const processedItems = [];
     await client.query("BEGIN");
 
     for (const item of flattenedItems) {
-      // 扣除庫存
       for (const [bomId, qty] of item.requirements.entries()) {
         await deductStock(client, bomId, qty);
       }
 
-      // 創建 sales_detail 記錄
       const saleRes = await client.query(
         "INSERT INTO sales_detail (product_id, sale_time, status) VALUES ($1, NOW(), FALSE) RETURNING detail_id",
         [item.productId]
       );
       const detailId = saleRes.rows[0].detail_id;
 
-      // 創建 custom_sales_detail 記錄
       if (item.selectedOptions && item.selectedOptions.length > 0) {
         for (const optionDetailId of item.selectedOptions) {
           await client.query(
@@ -130,7 +136,10 @@ async function createOrder(orderItems) {
     return processedItems;
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = error.msg || "創建訂單失敗";
+    error.msg = error.msg || "建立訂單失敗";
+    if (error.isActiveError) {
+      error.isActiveError = true;
+    }
     logger.error(error, null, "createOrder");
     throw error;
   } finally {
@@ -139,57 +148,50 @@ async function createOrder(orderItems) {
 }
 
 /**
- * 更新訂單狀態
- * @param {number} detailId - 銷售明細ID
- * @param {boolean} status - true 代表完成, false 代表取消
+ * 更新訂單狀態；status=false 時僅刪除，不回補庫存
  */
-async function updateOrderStatus(detailId, status) {
+async function updateOrderStatus(detailId, status, refund = false) {
   const pool = getPoolRW();
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
     if (status === true) {
-      // 完成訂單
       await client.query(
         "UPDATE sales_detail SET status = TRUE WHERE detail_id = $1",
         [detailId]
       );
     } else {
-      // 取消訂單
-      // 1. 獲取訂單詳情
       const orderRes = await client.query(
         "SELECT product_id FROM sales_detail WHERE detail_id = $1",
         [detailId]
       );
       if (orderRes.rows.length === 0) {
         logger.warn(
-          `嘗試取消一個不存在或已被取消的訂單，detailId: ${detailId}`,
+          `嘗試取消不存在或已被刪除的訂單，detailId: ${detailId}`,
           "updateOrderStatus"
         );
         return;
       }
-      const { product_id } = orderRes.rows[0];
 
+      const { product_id } = orderRes.rows[0];
       const optionsRes = await client.query(
         "SELECT option_detail_id FROM custom_sales_detail WHERE detail_id = $1",
         [detailId]
       );
       const selectedOptionIds = optionsRes.rows.map((r) => r.option_detail_id);
-
-      // 2. 計算物料需求
       const requirements = await getMaterialRequirements(
         client,
         product_id,
         selectedOptionIds
       );
 
-      // 3. 歸還庫存、此部分不實做 目前的邏輯為取消都是由於庫存錯誤
-      // for (const [bomId, qty] of requirements.entries()) {
-      //     await returnStock(client, bomId, qty);
-      // }
+      if (refund) {
+        for (const [bomId, qty] of requirements.entries()) {
+          await returnStock(client, bomId, qty);
+        }
+      }
 
-      // 4. 刪除訂單 (ON DELETE CASCADE 會自動刪除 custom_sales_detail)
       await client.query("DELETE FROM sales_detail WHERE detail_id = $1", [
         detailId,
       ]);
@@ -205,4 +207,74 @@ async function updateOrderStatus(detailId, status) {
   }
 }
 
-export { createOrder, updateOrderStatus };
+async function reorderSingle(detailId) {
+  const pool = getPoolRW();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const orderRes = await client.query(
+      "SELECT product_id FROM sales_detail WHERE detail_id = $1",
+      [detailId]
+    );
+    if (orderRes.rows.length === 0) {
+      const err = new Error(`找不到訂單 detailId=${detailId}`);
+      err.isStockError = true;
+      throw err;
+    }
+    const productId = orderRes.rows[0].product_id;
+    const optionsRes = await client.query(
+      "SELECT option_detail_id FROM custom_sales_detail WHERE detail_id = $1",
+      [detailId]
+    );
+    const optionIds = optionsRes.rows.map((r) => r.option_detail_id);
+
+    await ensureProductsActive(client, [productId]);
+    const requirements = await getMaterialRequirements(client, productId, optionIds);
+    for (const [bomId, qty] of requirements.entries()) {
+      const available = await getStockByBomId(bomId);
+      if (available < qty) {
+        const err = new Error(`庫存不足: 材料ID ${bomId}`);
+        err.productId = productId;
+        err.isStockError = true;
+        throw err;
+      }
+    }
+
+    for (const [bomId, qty] of requirements.entries()) {
+      await deductStock(client, bomId, qty);
+    }
+
+    const saleRes = await client.query(
+      "INSERT INTO sales_detail (product_id, sale_time, status) VALUES ($1, NOW(), FALSE) RETURNING detail_id",
+      [productId]
+    );
+    const newDetailId = saleRes.rows[0].detail_id;
+
+    if (optionIds.length > 0) {
+      for (const optionDetailId of optionIds) {
+        await client.query(
+          "INSERT INTO custom_sales_detail (detail_id, option_detail_id) VALUES ($1, $2)",
+          [newDetailId, optionDetailId]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    return {
+      detailId: newDetailId,
+      productId,
+      materialRequirements: Object.fromEntries(requirements),
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    if (error.isActiveError) error.isActiveError = true;
+    if (error.isStockError) error.isStockError = true;
+    logger.error(error, null, "reorderSingle");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export { createOrder, updateOrderStatus, reorderSingle };

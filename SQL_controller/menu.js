@@ -6,10 +6,11 @@ import { getStockByBomId } from "./inventory.js";
  * 僅取得所有菜單的基礎資訊，並檢查預設原料庫存是否充足
  * @returns {Promise<Array<Object>>} 簡化後的菜單資訊陣列
  */
-async function getMenus() {
+async function getMenus(includeInactive = false) {
   const pool = getPoolRO();
   const client = await pool.connect();
   try {
+    const activeFilter = includeInactive ? "" : "WHERE p.is_active = TRUE";
     const query = `
       WITH StockAvailability AS (
         -- Step 1: Calculate available stock for each BOM item, considering shelf life
@@ -49,6 +50,7 @@ async function getMenus() {
         COALESCE(poa.is_available, TRUE) AS "isAvailable" -- Products with no base materials are considered available
       FROM product p
       LEFT JOIN ProductOverallAvailability poa ON p.product_id = poa.product_id
+      ${activeFilter}
       ORDER BY p.product_id;
     `;
 

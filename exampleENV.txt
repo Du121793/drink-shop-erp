@@ -1,5 +1,6 @@
+MENU_URL = "http://localhost"
 SERVER_URL = "http://localhost"
-SERVER_PORT="4000"
+SERVER_PORT = "4000"
 SERVER_URL="https://your-domain.com"
 
 # JWT 金鑰（後端簽發/驗證）

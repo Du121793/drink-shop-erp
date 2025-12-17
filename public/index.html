@@ -3,16 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>待處理訂單 QR Code</title>
+    <title>待製作的 QR Code</title>
     <style>
       body {
-        font-family: sans-serif;
+        font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
         background-color: #f4f4f9;
         color: #333;
+        margin: 0;
+        padding: 0;
       }
       h1 {
         text-align: center;
         color: #444;
+        margin-top: 20px;
       }
       #main-container {
         max-width: 1200px;
@@ -37,14 +40,15 @@
       }
       .qr-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 20px;
       }
       .qr-item {
         text-align: center;
-        padding: 10px;
+        padding: 12px;
         border: 1px solid #eee;
-        border-radius: 4px;
+        border-radius: 6px;
+        background-color: #fafafa;
       }
       .qr-item img {
         max-width: 100%;
@@ -53,36 +57,39 @@
         margin-bottom: 10px;
       }
       .qr-item p {
-        font-size: 0.9em;
-        margin: 0;
+        font-size: 0.95em;
+        margin: 0 0 8px 0;
         word-break: break-all;
       }
       .qr-actions {
         display: flex;
-        justify-content: space-around;
-        margin-top: 10px;
+        flex-direction: column;
+        gap: 8px;
       }
       .qr-actions button {
         padding: 8px 12px;
         border: none;
         border-radius: 5px;
         cursor: pointer;
-        font-weight: bold;
+        font-weight: 600;
+        color: #fff;
       }
-      .qr-actions .complete-btn {
+      .complete-btn {
         background-color: #28a745;
-        color: white;
       }
-      .qr-actions .cancel-btn {
-        background-color: #dc3545;
-        color: white;
+      .cancel-btn {
+        background-color: #d9534f;
+      }
+      .refund-btn {
+        background-color: #f0ad4e;
       }
       #error-log {
         color: #d8000c;
         background-color: #ffbaba;
         border: 1px solid #d8000c;
         padding: 10px;
-        margin-top: 20px;
+        margin: 10px auto;
+        max-width: 1200px;
         border-radius: 5px;
       }
       #loading {
@@ -90,12 +97,17 @@
         font-size: 1.5em;
         padding: 20px;
       }
+      .empty-placeholder {
+        text-align: center;
+        color: #777;
+        padding: 20px 0;
+      }
     </style>
   </head>
   <body>
-    <h1>待處理訂單 QR Code</h1>
+    <h1>待製作的 QR Code</h1>
     <div id="main-container">
-      <div id="loading">讀取中...</div>
+      <div id="loading">載入中...</div>
       <div id="requests-container"></div>
     </div>
     <div id="error-log" style="display: none"></div>
@@ -105,45 +117,107 @@
       const errorLog = document.getElementById("error-log");
       const loadingDiv = document.getElementById("loading");
 
-      async function updateOrderStatus(detailId, status, requestUUID) {
+      function showError(message) {
+        errorLog.textContent = `錯誤：${message}`;
+        errorLog.style.display = "block";
+      }
+
+      function clearError() {
+        errorLog.style.display = "none";
+        errorLog.textContent = "";
+      }
+
+      async function updateOrderStatus(
+        detailId,
+        status,
+        requestUUID,
+        refund = false
+      ) {
         try {
           const response = await fetch(`/api/order/${detailId}`, {
             method: "PATCH",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ status: status, requestUUID: requestUUID }),
+            body: JSON.stringify({
+              status,
+              requestUUID,
+              refund,
+            }),
           });
 
+          const payload = response.ok ? await response.json() : await response.json().catch(() => ({}));
           if (!response.ok) {
-            const errorData = await response.json();
             throw new Error(
-              errorData.msg || `更新訂單狀態失敗 (狀態碼: ${response.status})`
+              payload.msg ||
+                `更新訂單狀態失敗（代碼：${response.status}）`
             );
           }
 
-          console.log(`訂單 ${detailId} 狀態更新成功為: ${status}`);
-          fetchAndDisplayQRCodes(); // 刷新列表
+          clearError();
+          fetchAndDisplayQRCodes();
         } catch (error) {
-          console.error("更新訂單狀態失敗:", error);
-          errorLog.textContent = `錯誤: ${error.message}`;
-          errorLog.style.display = "block";
+          console.error("更新訂單狀態失敗", error);
+          showError(error.message);
         }
+      }
+
+      async function reorderOrder(detailId, requestUUID) {
+        try {
+          const response = await fetch("/api/order/reorder", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ detailId, requestUUID }),
+          });
+
+          const payload = response.ok ? await response.json() : await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(
+              payload.msg ||
+                `重新下單失敗（代碼：${response.status}）`
+            );
+          }
+
+          clearError();
+          fetchAndDisplayQRCodes();
+          return true;
+        } catch (error) {
+          console.error("重新下單失敗", error);
+          showError(error.message);
+          alert(error.message);
+          return false;
+        }
+      }
+
+      async function handleCancel(detailId, requestUUID, refund = false) {
+        const wantReorder = window.confirm("是否重新為此 UUID 下單？");
+
+        if (wantReorder) {
+          const reordered = await reorderOrder(detailId, requestUUID);
+          if (reordered) {
+            return;
+          }
+        }
+
+        await updateOrderStatus(detailId, false, requestUUID, refund);
       }
 
       async function fetchAndDisplayQRCodes() {
         try {
           const response = await fetch("/api/order/cache");
           if (!response.ok) {
-            throw new Error(`HTTP 錯誤! 狀態: ${response.status}`);
+            throw new Error(`HTTP 錯誤，代碼：${response.status}`);
           }
           const requests = await response.json();
 
           loadingDiv.style.display = "none";
-          requestsContainer.innerHTML = ""; // 清空現有內容
+          requestsContainer.innerHTML = "";
 
           if (requests.length === 0) {
-            requestsContainer.innerHTML = "<p>目前沒有待處理的訂單。</p>";
+            requestsContainer.innerHTML =
+              '<div class="empty-placeholder">目前沒有待製作的訂單</div>';
           }
 
           for (const request of requests) {
@@ -151,7 +225,7 @@
             requestDiv.className = "request-group";
 
             const title = document.createElement("h2");
-            title.textContent = `訂單請求 UUID: ${request.requestUUID}`;
+            title.textContent = `訂單請求 UUID：${request.requestUUID}`;
             requestDiv.appendChild(title);
 
             const qrGrid = document.createElement("div");
@@ -166,9 +240,8 @@
               img.alt = `QR Code for detailId ${item.detailId}`;
 
               const text = document.createElement("p");
-              text.textContent = `明細ID: ${item.detailId}`;
+              text.textContent = `明細 ID：${item.detailId}`;
 
-              // New buttons
               const actionsDiv = document.createElement("div");
               actionsDiv.className = "qr-actions";
 
@@ -180,32 +253,37 @@
 
               const cancelButton = document.createElement("button");
               cancelButton.className = "cancel-btn";
-              cancelButton.textContent = "取消";
+              cancelButton.textContent = "取消（不退原料，預設）";
               cancelButton.onclick = () =>
-                updateOrderStatus(item.detailId, false, request.requestUUID);
+                handleCancel(item.detailId, request.requestUUID, false);
+
+              const refundButton = document.createElement("button");
+              refundButton.className = "refund-btn";
+              refundButton.textContent = "取消並退還原料";
+              refundButton.onclick = () =>
+                handleCancel(item.detailId, request.requestUUID, true);
 
               actionsDiv.appendChild(completeButton);
               actionsDiv.appendChild(cancelButton);
+              actionsDiv.appendChild(refundButton);
 
               qrItemDiv.appendChild(img);
               qrItemDiv.appendChild(text);
-              qrItemDiv.appendChild(actionsDiv); // Append buttons
+              qrItemDiv.appendChild(actionsDiv);
               qrGrid.appendChild(qrItemDiv);
             }
             requestDiv.appendChild(qrGrid);
             requestsContainer.appendChild(requestDiv);
           }
 
-          errorLog.style.display = "none";
+          clearError();
         } catch (error) {
-          console.error("獲取 QR Code 失敗:", error);
-          errorLog.textContent = `錯誤: ${error.message}`;
-          errorLog.style.display = "block";
+          console.error("讀取 QR Code 失敗", error);
+          showError(error.message);
           loadingDiv.style.display = "none";
         }
       }
 
-      // 立即執行一次，然後每秒執行一次
       fetchAndDisplayQRCodes();
       setInterval(fetchAndDisplayQRCodes, 1000);
     </script>

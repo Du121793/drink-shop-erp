@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -14,6 +14,7 @@ import order from "./routes/order.js";
 import autoRestock from "./routes/autoRestock.js";
 import supplier from "./routes/supplier.js";
 import permissions from "./routes/permissions.js";
+import grafanaRouter from "./routes/grafana/index.js";
 import { passport as accessPassport } from "./config/passport.js";
 import { start as startCornJob } from "./corn/cleanup.js";
 
@@ -33,6 +34,7 @@ app.use(express.static("public"));
 app.use(express.json());
 app.use(express.urlencoded());
 
+app.use("/grafana", grafanaRouter);
 app.use("/menu", menu);
 app.use("/inventory", inventory);
 app.use("/order", order);
@@ -71,3 +73,4 @@ app.listen(SERVER_PORT, () => {
     logger.error(e, null, "Server");
   }
 });
+
