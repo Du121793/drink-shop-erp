@@ -2,10 +2,10 @@ import { getPoolRO } from "./db_connect.js";
 import * as logger from "../methods/logger.js";
 
 /**
- * 獲取所有原料的統計數據，用於補貨建議計算。
- * 數據包括：7天內的消耗量、目前庫存、最大庫存、保存期限、以及未來7天即將過期量。
- * @param {number} days - 要回溯計算消耗量的天數，預設為 7 天。
- * @returns {Promise<Array<object>>} 一個包含每個物料詳細統計數據的物件陣列。
+ * 取得原料統計資料，用於補貨建議計算。
+ * 包含：近七日消耗、目前庫存（依 expiry_time）、即將過期庫存。
+ * @param {number} days - 計算過去消耗的天數，預設 7 天。
+ * @returns {Promise<Array<object>>}
  */
 async function getMaterialStats(days = 7) {
   const pool = getPoolRO();
@@ -13,7 +13,7 @@ async function getMaterialStats(days = 7) {
   try {
     const query = `
         WITH RecentConsumption AS (
-            -- 步驟一：計算近期各原料的總消耗量 (僅計算正消耗)
+            -- 步驟一：計算近七日總消耗量（只計正消耗）
             SELECT
                 bom_id,
                 SUM(quantity_consumed) AS consumed_qty
@@ -22,7 +22,7 @@ async function getMaterialStats(days = 7) {
             GROUP BY bom_id
         ),
         CurrentStock AS (
-            -- 步驟二：計算各原料目前的有效庫存
+            -- 步驟二：計算每個原料目前的總庫存（依 expiry_time）
             SELECT
                 b.bom_id,
                 b.material_name,
@@ -31,21 +31,19 @@ async function getMaterialStats(days = 7) {
                 COALESCE(SUM(i.remaining_qty), 0) AS total_stock
             FROM bom b
             LEFT JOIN inventory i ON b.bom_id = i.bom_id
-            AND (b.shelf_life_days IS NULL OR (i.stock_in_time + (b.shelf_life_days * INTERVAL '1 day')) >= NOW())
+            AND i.expiry_time >= NOW()
             GROUP BY b.bom_id, b.material_name, b.shelf_life_days, b.max_stock_qty
         ),
         UpcomingExpiries AS (
-            -- 步驟三：計算未來7天內即將過期的庫存量
+            -- 步驟三：計算未來 7 天內即將過期的庫存量（依 expiry_time）
             SELECT
                 i.bom_id,
                 SUM(i.remaining_qty) as expiring_qty
             FROM inventory i
-            JOIN bom b ON i.bom_id = b.bom_id
-            WHERE b.shelf_life_days IS NOT NULL
-              AND (i.stock_in_time + (b.shelf_life_days * INTERVAL '1 day')) BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+            WHERE i.expiry_time BETWEEN NOW() AND NOW() + INTERVAL '7 days'
             GROUP BY i.bom_id
         )
-        -- 步驟四：組合所有數據並排序
+        -- 步驟四：彙總各項指標並排序
         SELECT
             cs.bom_id,
             cs.material_name,
@@ -57,8 +55,8 @@ async function getMaterialStats(days = 7) {
         FROM CurrentStock cs
         LEFT JOIN RecentConsumption rc ON cs.bom_id = rc.bom_id
         LEFT JOIN UpcomingExpiries ue ON cs.bom_id = ue.bom_id
-        WHERE cs.max_stock_qty IS NOT NULL AND cs.max_stock_qty > 0 -- 只選擇有設定最大庫存的品項
-        ORDER BY seven_day_consumption DESC, cs.bom_id ASC; -- 主要按消耗量排序，次要按ID排序以確保順序穩定
+        WHERE cs.max_stock_qty IS NOT NULL AND cs.max_stock_qty > 0
+        ORDER BY seven_day_consumption DESC, cs.bom_id ASC;
     `;
     const result = await client.query(query);
     return result.rows.map(row => ({
@@ -66,7 +64,7 @@ async function getMaterialStats(days = 7) {
         expiring_soon_qty: parseFloat(row.expiring_soon_qty)
     }));
   } catch (error) {
-    error.msg = `獲取物料統計數據時發生錯誤`;
+    error.msg = `取得原料統計資料時發生錯誤`;
     logger.error(error, null, "getMaterialStats");
     throw error;
   } finally {

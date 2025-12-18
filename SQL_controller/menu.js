@@ -3,8 +3,7 @@ import * as logger from "../methods/logger.js";
 import { getStockByBomId } from "./inventory.js";
 
 /**
- * 僅取得所有菜單的基礎資訊，並檢查預設原料庫存是否充足
- * @returns {Promise<Array<Object>>} 簡化後的菜單資訊陣列
+ * 取得菜單列表，並檢查是否有足夠庫存（依 expiry_time 判斷未過期）。
  */
 async function getMenus(includeInactive = false) {
   const pool = getPoolRO();
@@ -13,17 +12,14 @@ async function getMenus(includeInactive = false) {
     const activeFilter = includeInactive ? "" : "WHERE p.is_active = TRUE";
     const query = `
       WITH StockAvailability AS (
-        -- Step 1: Calculate available stock for each BOM item, considering shelf life
         SELECT
           i.bom_id,
           COALESCE(SUM(i.remaining_qty), 0) AS available_stock
         FROM inventory i
-        JOIN bom b ON i.bom_id = b.bom_id
-        WHERE (b.shelf_life_days IS NULL OR (i.stock_in_time + (b.shelf_life_days * INTERVAL '1 day')) >= NOW())
+        WHERE i.expiry_time >= NOW()
         GROUP BY i.bom_id
       ),
       ProductMaterialCheck AS (
-        -- Step 2: For each product's base material, check if stock is sufficient
         SELECT
           mp.product_id,
           mp.bom_id,
@@ -34,20 +30,18 @@ async function getMenus(includeInactive = false) {
         LEFT JOIN StockAvailability sa ON mp.bom_id = sa.bom_id
       ),
       ProductOverallAvailability AS (
-        -- Step 3: Determine overall availability for each product based on all its base materials
         SELECT
           pmc.product_id,
           BOOL_AND(pmc.is_sufficient) AS is_available
         FROM ProductMaterialCheck pmc
         GROUP BY pmc.product_id
       )
-      -- Step 4: Final selection, joining products with their availability status
       SELECT
         p.product_id,
         p.product_name,
         p.price,
         p.is_active,
-        COALESCE(poa.is_available, TRUE) AS "isAvailable" -- Products with no base materials are considered available
+        COALESCE(poa.is_available, TRUE) AS "isAvailable"
       FROM product p
       LEFT JOIN ProductOverallAvailability poa ON p.product_id = poa.product_id
       ${activeFilter}
@@ -55,14 +49,13 @@ async function getMenus(includeInactive = false) {
     `;
 
     const result = await client.query(query);
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.product_id,
       name: row.product_name,
       price: row.price,
       isAvailable: row.isAvailable,
-      is_active: row.is_active, // Use the correct field name from the query
+      is_active: row.is_active,
     }));
-
   } catch (error) {
     error.msg = "取得菜單列表時發生錯誤";
     logger.error(error, null, "getMenus");
@@ -73,9 +66,7 @@ async function getMenus(includeInactive = false) {
 }
 
 /**
- * 根據產品 ID 取得其所有客製化選項，並為每個選項細項檢查庫存充足性
- * @param {number} productId - 要查詢的產品 ID
- * @returns {Promise<Array<Object>>} 該產品的客製化選項及可用狀態
+ * 取得產品的客製選項，並檢查每個選項組合的庫存是否足夠（依 expiry_time）。
  */
 async function getOptionsByProductId(productId) {
   if (!productId) {
@@ -86,7 +77,6 @@ async function getOptionsByProductId(productId) {
   const client = await pool.connect();
 
   try {
-    // 取得產品的基礎原料需求
     const baseRequirementsResult = await client.query(
       "SELECT bom_id, material_used_qty FROM material_product WHERE product_id = $1",
       [productId]
@@ -96,7 +86,6 @@ async function getOptionsByProductId(productId) {
       quantity: parseFloat(r.material_used_qty),
     }));
 
-    // 取得該產品的所有客製化選項
     const optionsResult = await client.query(
       `
         SELECT co.option_id, co.option_name, od.option_detail_id, od.option_detail_name, od.material_qty, od.bom_id as option_bom_id, od.extra_price
@@ -105,7 +94,7 @@ async function getOptionsByProductId(productId) {
         JOIN option_detail od ON co.option_id = od.option_id
         WHERE po.product_id = $1
         ORDER BY co.option_id, od.option_detail_id;
-    `,
+      `,
       [productId]
     );
 
@@ -113,7 +102,6 @@ async function getOptionsByProductId(productId) {
       return [];
     }
 
-    // 處理與組合選項資料，並非同步檢查每個細項的可用性
     const groupedOptions = {};
 
     for (const row of optionsResult.rows) {
@@ -125,7 +113,7 @@ async function getOptionsByProductId(productId) {
         };
       }
 
-      // 計算總需求量 (基礎 + 選項)
+      // 計算此選項明細加上基礎材料的總需求
       const totalRequirements = [...baseRequirements];
       const optionRequirement = {
         bom_id: row.option_bom_id,
@@ -141,7 +129,7 @@ async function getOptionsByProductId(productId) {
         totalRequirements.push(optionRequirement);
       }
 
-      // 檢查總需求量的庫存
+      // 檢查所有需求對應的庫存是否足夠
       let isDetailAvailable = true;
       for (const req of totalRequirements) {
         const stock = await getStockByBomId(req.bom_id);
@@ -161,7 +149,7 @@ async function getOptionsByProductId(productId) {
 
     return Object.values(groupedOptions);
   } catch (error) {
-    error.msg = `獲取產品 ID: ${productId} 的選項時發生錯誤`;
+    error.msg = `取得產品 ID: ${productId} 的客製選項失敗`;
     logger.error(error, null, "getOptionsByProductId");
     throw error;
   } finally {
@@ -170,19 +158,9 @@ async function getOptionsByProductId(productId) {
 }
 
 /**
- * 新增菜品
- * @param {string} productName - 菜品名稱
- * @param {number} price - 菜品價格
- * @param {Array<number>} customOptionIds - 自定義選項ID陣列
- * @param {Array<Object>} baseMaterials - 基礎原料
- * @returns {Promise<number>} - 新增菜品的ID
+ * 建立菜單
  */
-async function createMenu(
-  productName,
-  price,
-  customOptionIds,
-  baseMaterials
-) {
+async function createMenu(productName, price, customOptionIds, baseMaterials) {
   const pool = getPoolRW();
   const client = await pool.connect();
   try {
@@ -216,7 +194,7 @@ async function createMenu(
     return productId;
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = "新增菜品失敗";
+    error.msg = "新增菜單失敗";
     logger.error(error, null, "createMenu");
     throw error;
   } finally {
@@ -225,10 +203,7 @@ async function createMenu(
 }
 
 /**
- * 新增自定義選項
- * @param {string} optionName - 選項名稱
- * @param {Array<Object>} details - 選項詳細內容
- * @returns {Promise<number>} - 新增選項的ID
+ * 建立客製選項
  */
 async function createCustomOption(optionName, details) {
   const pool = getPoolRW();
@@ -261,7 +236,7 @@ async function createCustomOption(optionName, details) {
     return optionId;
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = "新增自定義選項失敗";
+    error.msg = "新增客製選項失敗";
     logger.error(error, null, "createCustomOption");
     throw error;
   } finally {
@@ -270,98 +245,101 @@ async function createCustomOption(optionName, details) {
 }
 
 /**
- * 更新菜品
- * @param {number} productId - 要更新的菜品ID
- * @param {object} data - 菜品資料
- * @returns {Promise<void>}
+ * 更新菜單
  */
 async function updateMenu(productId, data) {
-    const pool = getPoolRW();
-    const client = await pool.connect();
-    try {
-        await client.query("BEGIN");
+  const pool = getPoolRW();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-        const { name, price, is_active, optionIds, baseMaterials } = data;
+    const { name, price, is_active, optionIds, baseMaterials } = data;
 
-        const productFields = [];
-        const productValues = [];
-        let fieldIndex = 1;
+    const productFields = [];
+    const productValues = [];
+    let fieldIndex = 1;
 
-        if (name !== undefined) {
-            productFields.push(`product_name = $${fieldIndex++}`);
-            productValues.push(name);
-        }
-        if (price !== undefined) {
-            productFields.push(`price = $${fieldIndex++}`);
-            productValues.push(price);
-        }
-        if (is_active !== undefined) {
-            productFields.push(`is_active = $${fieldIndex++}`);
-            productValues.push(is_active);
-        }
-        
-        if (productFields.length > 0) {
-            productValues.push(productId);
-            const updateProductQuery = `UPDATE product SET ${productFields.join(", ")} WHERE product_id = $${fieldIndex}`;
-            await client.query(updateProductQuery, productValues);
-        }
-
-        if (optionIds !== undefined) {
-            await client.query("DELETE FROM product_option WHERE product_id = $1", [productId]);
-            if (optionIds.length > 0) {
-                for (const optionId of optionIds) {
-                    await client.query(
-                        "INSERT INTO product_option (product_id, option_id) VALUES ($1, $2)",
-                        [productId, optionId]
-                    );
-                }
-            }
-        }
-
-        if (baseMaterials !== undefined) {
-            await client.query("DELETE FROM material_product WHERE product_id = $1", [productId]);
-            if (baseMaterials.length > 0) {
-                for (const material of baseMaterials) {
-                    await client.query(
-                        "INSERT INTO material_product (product_id, bom_id, material_used_qty) VALUES ($1, $2, $3)",
-                        [productId, material.bom_id, material.quantity]
-                    );
-                }
-            }
-        }
-
-        await client.query("COMMIT");
-    } catch (error) {
-        await client.query("ROLLBACK");
-        error.msg = `更新菜品 #${productId} 失敗`;
-        logger.error(error, null, "updateMenu");
-        throw error;
-    } finally {
-        client.release();
+    if (name !== undefined) {
+      productFields.push(`product_name = $${fieldIndex++}`);
+      productValues.push(name);
     }
+    if (price !== undefined) {
+      productFields.push(`price = $${fieldIndex++}`);
+      productValues.push(price);
+    }
+    if (is_active !== undefined) {
+      productFields.push(`is_active = $${fieldIndex++}`);
+      productValues.push(is_active);
+    }
+
+    if (productFields.length > 0) {
+      productValues.push(productId);
+      const updateProductQuery = `UPDATE product SET ${productFields.join(
+        ", "
+      )} WHERE product_id = $${fieldIndex}`;
+      await client.query(updateProductQuery, productValues);
+    }
+
+    if (optionIds !== undefined) {
+      await client.query("DELETE FROM product_option WHERE product_id = $1", [
+        productId,
+      ]);
+      if (optionIds.length > 0) {
+        for (const optionId of optionIds) {
+          await client.query(
+            "INSERT INTO product_option (product_id, option_id) VALUES ($1, $2)",
+            [productId, optionId]
+          );
+        }
+      }
+    }
+
+    if (baseMaterials !== undefined) {
+      await client.query("DELETE FROM material_product WHERE product_id = $1", [
+        productId,
+      ]);
+      if (baseMaterials.length > 0) {
+        for (const material of baseMaterials) {
+          await client.query(
+            "INSERT INTO material_product (product_id, bom_id, material_used_qty) VALUES ($1, $2, $3)",
+            [productId, material.bom_id, material.quantity]
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    error.msg = `更新菜單 #${productId} 失敗`;
+    logger.error(error, null, "updateMenu");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
-
 /**
- * 刪除菜品 (硬刪除)
- * @param {number} productId - 要刪除的菜品ID
- * @returns {Promise<void>}
+ * 硬刪菜單
  */
 async function deleteMenu(productId) {
   const pool = getPoolRW();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // 1. 刪除產品與客製化選項的關聯
-    await client.query("DELETE FROM product_option WHERE product_id = $1", [productId]);
-    // 2. 刪除產品使用的基礎原料
-    await client.query("DELETE FROM material_product WHERE product_id = $1", [productId]);
-    // 3. 刪除產品本身
-    await client.query("DELETE FROM product WHERE product_id = $1", [productId]);
+    await client.query("DELETE FROM product_option WHERE product_id = $1", [
+      productId,
+    ]);
+    await client.query("DELETE FROM material_product WHERE product_id = $1", [
+      productId,
+    ]);
+    await client.query("DELETE FROM product WHERE product_id = $1", [
+      productId,
+    ]);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = `刪除菜品 #${productId} 失敗`;
+    error.msg = `刪除菜單 #${productId} 失敗`;
     logger.error(error, null, "deleteMenu");
     throw error;
   } finally {
@@ -370,16 +348,7 @@ async function deleteMenu(productId) {
 }
 
 /**
- * 更新自定義選項
- * @param {number} optionId - 要更新的選項ID
- * @param {object} optionData - 選項資料
- * @param {string} optionData.name - 選項名稱
- * @param {Array<Object>} optionData.details - 選項詳細內容
- * @param {string} optionData.details[].name - 選項詳細名稱
- * @param {number} optionData.details[].quantity - 選項所需物料數量
- * @param {number} optionData.details[].bom_id - 選項所需物料BOM ID
- * @param {number} optionData.details[].extra_price - 選項額外價格
- * @returns {Promise<void>}
+ * 更新客製選項
  */
 async function updateCustomOption(optionId, { name, details }) {
   const pool = getPoolRW();
@@ -412,7 +381,7 @@ async function updateCustomOption(optionId, { name, details }) {
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = `更新選項 #${optionId} 失敗`;
+    error.msg = `更新客製選項 #${optionId} 失敗`;
     logger.error(error, null, "updateCustomOption");
     throw error;
   } finally {
@@ -421,9 +390,7 @@ async function updateCustomOption(optionId, { name, details }) {
 }
 
 /**
- * 刪除自定義選項
- * @param {number} optionId - 要刪除的選項ID
- * @returns {Promise<void>}
+ * 刪除客製選項
  */
 async function deleteCustomOption(optionId) {
   const pool = getPoolRW();
@@ -442,7 +409,7 @@ async function deleteCustomOption(optionId) {
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = `刪除選項 #${optionId} 失敗`;
+    error.msg = `刪除客製選項 #${optionId} 失敗`;
     logger.error(error, null, "deleteCustomOption");
     throw error;
   } finally {
@@ -450,6 +417,9 @@ async function deleteCustomOption(optionId) {
   }
 }
 
+/**
+ * 取得所有客製選項
+ */
 async function getAllCustomOptions() {
   const pool = getPoolRO();
   const client = await pool.connect();
@@ -470,7 +440,6 @@ async function getAllCustomOptions() {
           details: [],
         };
       }
-      // Only add details if they exist (left join might return nulls for option_detail columns)
       if (row.option_detail_id) {
         groupedOptions[row.option_id].details.push({
           optionDetailId: row.option_detail_id,
@@ -483,7 +452,7 @@ async function getAllCustomOptions() {
     }
     return Object.values(groupedOptions);
   } catch (error) {
-    error.msg = "獲取所有自定義選項失敗";
+    error.msg = "取得自定義選項失敗";
     logger.error(error, null, "getAllCustomOptions");
     throw error;
   } finally {
@@ -492,9 +461,7 @@ async function getAllCustomOptions() {
 }
 
 /**
- * 根據產品 ID 取得其基礎原料
- * @param {number} productId - 產品 ID
- * @returns {Promise<Array<Object>>}
+ * 取得產品的基礎原料
  */
 async function getBaseMaterialsByProductId(productId) {
   const pool = getPoolRO();

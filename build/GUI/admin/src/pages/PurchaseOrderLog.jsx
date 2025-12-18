@@ -38,6 +38,7 @@ function PurchaseOrderLog() {
     bomId: null,
     bomName: '',
     defaultQty: '',
+    shelfLifeDays: null,
   });
 
   const supplierMap = useMemo(
@@ -62,7 +63,7 @@ function PurchaseOrderLog() {
       setSuppliers(sRes.data?.suppliers || []);
       setBoms(bRes.data?.boms || []);
     } catch (err) {
-      console.error('載入採購紀錄失敗:', err);
+      console.error('載入採購紀錄失敗', err);
       setError('載入採購紀錄失敗，請稍後再試');
     } finally {
       setLoading(false);
@@ -73,13 +74,14 @@ function PurchaseOrderLog() {
     fetchData();
   }, []);
 
-  const openRestockDialog = (item, bomName) => {
+  const openRestockDialog = (item, bomName, shelfLifeDays) => {
     setRestockTarget({
       open: true,
       orderId: item.order_id,
       bomId: item.bom_id,
       bomName: bomName || `BOM #${item.bom_id}`,
       defaultQty: item.order_qty,
+      shelfLifeDays: shelfLifeDays ?? null,
     });
   };
 
@@ -90,6 +92,7 @@ function PurchaseOrderLog() {
       bomId: null,
       bomName: '',
       defaultQty: '',
+      shelfLifeDays: null,
     });
   };
 
@@ -105,7 +108,7 @@ function PurchaseOrderLog() {
       await fetchData();
       closeRestockDialog();
     } catch (err) {
-      console.error('補貨後更新狀態失敗:', err);
+      console.error('補貨後更新狀態失敗', err);
       setError('補貨已完成但更新狀態失敗，請稍後再試或手動重試');
     } finally {
       setActionLoading(false);
@@ -122,7 +125,7 @@ function PurchaseOrderLog() {
       await updatePurchaseOrderStatus(orderId, 3);
       await fetchData();
     } catch (err) {
-      console.error('取消案件失敗:', err);
+      console.error('取消案件失敗', err);
       setError('取消案件失敗，請稍後再試');
     } finally {
       setActionLoading(false);
@@ -169,7 +172,7 @@ function PurchaseOrderLog() {
                         <Button
                           variant="contained"
                           size="small"
-                          onClick={() => openRestockDialog(item, bom?.material_name)}
+                          onClick={() => openRestockDialog(item, bom?.material_name, bom?.shelf_life_days)}
                           disabled={actionLoading || loading}
                         >
                           補貨
@@ -199,6 +202,7 @@ function PurchaseOrderLog() {
         bomId={restockTarget.bomId}
         bomName={restockTarget.bomName}
         defaultQuantity={restockTarget.defaultQty}
+        shelfLifeDays={restockTarget.shelfLifeDays}
         onRestockSuccess={handleRestockSuccess}
       />
     </Box>

@@ -102,7 +102,7 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
   const [selectedItem, setSelectedItem] = useState({ id: null, name: null, shelfLifeDays: null });
 
   const [isRestockOpen, setRestockOpen] = useState(false);
-  const [restockItem, setRestockItem] = useState({ id: null, name: null });
+  const [restockItem, setRestockItem] = useState({ id: null, name: null, shelfLifeDays: null });
 
   // 移除 BOM 編輯對話框的狀態
   // const [isBomEditOpen, setBomEditOpen] = useState(false);
@@ -173,13 +173,13 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
   };
 
   const handleRestockClick = (item) => {
-    setRestockItem({ id: item.bom_id, name: item.bom_name });
+    setRestockItem({ id: item.bom_id, name: item.bom_name, shelfLifeDays: item.shelf_life_days });
     setRestockOpen(true);
   };
 
   const handleRestockClose = () => {
     setRestockOpen(false);
-    setRestockItem({ id: null, name: null });
+    setRestockItem({ id: null, name: null, shelfLifeDays: null });
   };
 
   const handleRestockSuccess = () => {
@@ -284,7 +284,6 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
         onClose={handleHistoryClose}
         bomId={selectedItem.id}
         bomName={selectedItem.name}
-        shelfLifeDays={selectedItem.shelfLifeDays}
         onRecordUpdated={fetchData}
       />
       <RestockDialog
@@ -292,6 +291,7 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
         onClose={handleRestockClose}
         bomId={restockItem.id}
         bomName={restockItem.name}
+        shelfLifeDays={restockItem.shelfLifeDays}
         onRestockSuccess={handleRestockSuccess}
       />
       {/* 移除 BOM 編輯對話框 */}

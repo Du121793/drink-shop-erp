@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS inventory (
   stock_in_time TIMESTAMP NOT NULL, -- 入庫時間
   stock_in_qty NUMERIC(10,2) NOT NULL, -- 入庫量
   remaining_qty NUMERIC(10,2) NOT NULL, -- 剩餘量
+  expiry_time TIMESTAMP NOT NULL, -- 過期時間（不可為空）
 
   CONSTRAINT fk_inventory_bom
     FOREIGN KEY (bom_id)
@@ -58,7 +59,10 @@ CREATE TABLE IF NOT EXISTS inventory (
     ON DELETE RESTRICT,
 
   CONSTRAINT chk_inventory_remaining_valid
-    CHECK (remaining_qty >= 0 AND remaining_qty <= stock_in_qty)
+    CHECK (remaining_qty >= 0 AND remaining_qty <= stock_in_qty),
+
+  CONSTRAINT chk_inventory_expiry_after_in
+    CHECK (expiry_time >= stock_in_time)
 );
 
 CREATE INDEX IF NOT EXISTS idx_inventory_bom_id
@@ -352,26 +356,25 @@ INSERT INTO material_product (product_id, bom_id, material_used_qty) VALUES
 (6, 15, 10),
 (6, 3, 40);
 
--- Step 4: Add initial inventory for all materials
--- (補上 bom_id=12 粉紅珍珠，避免圖表/扣料缺資料)
-INSERT INTO inventory (bom_id, stock_in_time, stock_in_qty, remaining_qty) VALUES
-(1, NOW(), 500, 500),  -- 泰式紅茶葉
-(2, NOW(), 500, 500),  -- 煉乳
-(3, NOW(), 500, 500),  -- 牛奶
-(4, NOW(), 500, 500),  -- 草莓
-(5, NOW(), 500, 500),  -- 優格
-(6, NOW(), 500, 500),  -- 冰塊
-(7, NOW(), 500, 500),  -- 烏龍茶
-(8, NOW(), 500, 500),  -- 開心果
-(9, NOW(), 500, 500),  -- 奶蓋粉
-(10, NOW(), 500, 500), -- 冬瓜茶磚
-(11, NOW(), 500, 500), -- 檸檬
-(12, NOW(), 500, 500), -- 粉紅珍珠
-(13, NOW(), 500, 500), -- 黑糖
-(14, NOW(), 500, 500), -- 芋頭
-(15, NOW(), 500, 500), -- 綠茶
-(16, NOW(), 500, 500), -- 方糖
-(17, NOW(), 500, 500); -- 芋圓
+-- Step 4: Add initial inventory for all materials（含過期時間）
+INSERT INTO inventory (bom_id, stock_in_time, stock_in_qty, remaining_qty, expiry_time) VALUES
+(1, NOW(), 500, 500, NOW() + INTERVAL '180 days'),  -- 泰式紅茶葉
+(2, NOW(), 500, 500, NOW() + INTERVAL '180 days'),  -- 煉乳
+(3, NOW(), 500, 500, NOW() + INTERVAL '90 days'),   -- 牛奶
+(4, NOW(), 500, 500, NOW() + INTERVAL '5 days'),    -- 草莓（近效期）
+(5, NOW(), 500, 500, NOW() + INTERVAL '20 days'),   -- 優格
+(6, NOW(), 500, 500, NOW() + INTERVAL '365 days'),  -- 冰塊
+(7, NOW(), 500, 500, NOW() + INTERVAL '120 days'),  -- 烏龍茶
+(8, NOW(), 500, 500, NOW() + INTERVAL '3 days'),    -- 開心果（近效期）
+(9, NOW(), 500, 500, NOW() + INTERVAL '90 days'),   -- 奶蓋粉
+(10, NOW(), 500, 500, NOW() + INTERVAL '60 days'),  -- 冬瓜茶磚
+(11, NOW(), 500, 500, NOW() + INTERVAL '30 days'),  -- 檸檬
+(12, NOW(), 500, 500, NOW() + INTERVAL '7 days'),   -- 粉紅珍珠（近效期）
+(13, NOW(), 500, 500, NOW() + INTERVAL '200 days'), -- 黑糖
+(14, NOW(), 500, 500, NOW() + INTERVAL '45 days'),  -- 芋頭
+(15, NOW(), 500, 500, NOW() + INTERVAL '150 days'), -- 綠茶
+(16, NOW(), 500, 500, NOW() + INTERVAL '365 days'), -- 方糖
+(17, NOW(), 500, 500, NOW() + INTERVAL '25 days');  -- 芋圓
 
 -- Step 1: Define the generic custom options
 INSERT INTO custom_option (option_name) VALUES
