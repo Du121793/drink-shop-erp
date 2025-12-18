@@ -1,15 +1,15 @@
--- n=10
+﻿-- sample suppliers n=10
 INSERT INTO supplier (supplier_name, email, phone)
 SELECT
-  '廠商' || gs,
+  'supplier' || gs,
   CASE
-    WHEN gs % 5 = 0 THEN NULL                  -- 兩個都空：這裡先把 email 設 NULL
-    WHEN gs % 3 = 0 THEN NULL                  -- 只留 phone
-    ELSE 'vendor' || gs || '@example.com'      -- 留 email
+    WHEN gs % 5 = 0 THEN NULL                  -- some suppliers without email
+    WHEN gs % 3 = 0 THEN NULL                  -- some suppliers without phone
+    ELSE 'vendor' || gs || '@example.com'
   END AS email,
   CASE
-    WHEN gs % 5 = 0 THEN NULL                  -- 兩個都空：phone 也 NULL
-    WHEN gs % 4 = 0 THEN NULL                  -- 只留 email
+    WHEN gs % 5 = 0 THEN NULL                  -- align with missing email for variety
+    WHEN gs % 4 = 0 THEN NULL                  -- some suppliers without email
     ELSE '09' || lpad((gs * 1234567 % 100000000)::text, 8, '0')
   END AS phone
 FROM generate_series(1, 10) AS gs
@@ -17,7 +17,7 @@ ON CONFLICT (supplier_name) DO UPDATE
 SET email = EXCLUDED.email,
     phone = EXCLUDED.phone;
 
--- n=10（取前 n 個 bom 來做示範）
+-- n=10 suppliers mapped to first 10 bom rows (looped assignment)
 WITH
 s AS (
   SELECT supplier_id,
@@ -33,7 +33,7 @@ b AS (
   LIMIT 10
 ),
 pairs AS (
-  -- 預設廠商
+  -- default supplier
   SELECT
     b.bom_id,
     s1.supplier_id,
@@ -44,7 +44,7 @@ pairs AS (
 
   UNION ALL
 
-  -- 第二供應商（非預設）
+  -- second supplier (non-default)
   SELECT
     b.bom_id,
     s2.supplier_id,

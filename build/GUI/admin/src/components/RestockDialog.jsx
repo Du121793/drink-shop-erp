@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,10 +10,22 @@ import {
 } from '@mui/material';
 import { addStock } from '../api/inventory';
 
-const RestockDialog = ({ open, onClose, bomId, bomName, onRestockSuccess }) => {
+// 補貨彈窗：可帶入預設數量，成功後透過回呼讓父層接續流程
+const RestockDialog = ({ open, onClose, bomId, bomName, onRestockSuccess, defaultQuantity }) => {
   const [quantity, setQuantity] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      if (defaultQuantity !== undefined && defaultQuantity !== null) {
+        setQuantity(String(defaultQuantity));
+      } else {
+        setQuantity('');
+      }
+      setError('');
+    }
+  }, [open, defaultQuantity]);
 
   const handleQuantityChange = (e) => {
     setQuantity(e.target.value);
@@ -29,11 +41,14 @@ const RestockDialog = ({ open, onClose, bomId, bomName, onRestockSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      await addStock({ bom_id: bomId, quantity: Number(quantity) });
-      onRestockSuccess(); // 通知父元件刷新列表並關閉對話框
+      const qtyNumber = Number(quantity);
+      await addStock({ bom_id: bomId, quantity: qtyNumber });
+      if (typeof onRestockSuccess === 'function') {
+        await onRestockSuccess(qtyNumber);
+      }
     } catch (err) {
       console.error('補貨失敗:', err);
-      setError('補貨失敗，請重試。');
+      setError('補貨失敗，請稍後再試');
     } finally {
       setLoading(false);
     }
@@ -51,7 +66,7 @@ const RestockDialog = ({ open, onClose, bomId, bomName, onRestockSuccess }) => {
       <DialogTitle>補貨: <Typography component="span" variant="h6" color="primary">{bomName}</Typography></DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          請輸入要補貨的數量。
+          請輸入要補貨的數量
         </Typography>
         <TextField
           autoFocus

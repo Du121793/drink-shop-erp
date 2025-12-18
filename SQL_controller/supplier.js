@@ -305,6 +305,55 @@ async function getPurchaseOrderGroups() {
   }
 }
 
+// 更新採購紀錄狀態（僅允許從狀態 0 更新為 1 或 3）
+async function updatePurchaseOrderStatus(orderId, status) {
+  if (!orderId) {
+    const err = new Error("order_id is required");
+    err.isBadRequest = true;
+    throw err;
+  }
+  if (![1, 3].includes(Number(status))) {
+    const err = new Error("狀態僅能更新為 1 或 3");
+    err.isBadRequest = true;
+    throw err;
+  }
+
+  const pool = getPoolRW();
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `
+      UPDATE purchase_order_log
+      SET order_status = $1
+      WHERE order_id = $2 AND order_status = 0
+      RETURNING order_id
+      `,
+      [status, orderId]
+    );
+
+    if (result.rowCount === 0) {
+      const check = await client.query(
+        "SELECT order_status FROM purchase_order_log WHERE order_id = $1",
+        [orderId]
+      );
+      if (check.rowCount === 0) {
+        const err = new Error("叫貨紀錄不存在");
+        err.isNotFound = true;
+        throw err;
+      }
+      const err = new Error("僅狀態 0 可更新狀態");
+      err.isBadRequest = true;
+      throw err;
+    }
+  } catch (error) {
+    if (!error.msg) error.msg = `更新叫貨紀錄狀態失敗 (order_id: ${orderId})`;
+    logger.error(error, null, "updatePurchaseOrderStatus");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export {
   getSuppliers,
   createSupplier,
@@ -317,4 +366,5 @@ export {
   getDefaultSuppliersForBoms,
   createPurchaseOrderLogs,
   getPurchaseOrderGroups,
+  updatePurchaseOrderStatus,
 };

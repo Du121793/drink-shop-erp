@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS
+﻿DROP TABLE IF EXISTS
   purchase_order_log,
   material_supplier,
   supplier,
@@ -264,13 +264,13 @@ CREATE TABLE IF NOT EXISTS purchase_order_log (
   order_qty    NUMERIC(10,2) NOT NULL,             -- 叫貨量
   order_time   TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- 叫貨時間
 
-  order_status SMALLINT NOT NULL DEFAULT 0,        -- 左側新增欄位：0=已下單, 1=已到貨, 2=取消
+    order_status SMALLINT NOT NULL DEFAULT 0,        -- 0=已聯絡 1=已抵達 3=失敗
 
   CONSTRAINT chk_purchase_order_qty_pos
     CHECK (order_qty > 0),
 
-  CONSTRAINT chk_purchase_order_status
-    CHECK (order_status IN (0,1,2)),
+    CONSTRAINT chk_purchase_order_status
+      CHECK (order_status IN (0,1,3)),
 
   -- 確保這個廠商「真的有供應」這個原料
   CONSTRAINT fk_purchase_order_material_supplier

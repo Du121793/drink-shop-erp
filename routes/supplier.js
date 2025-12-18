@@ -148,4 +148,26 @@ router.post("/purchase-orders", accessChecker(1), async (req, res) => {
   }
 });
 
+router.patch("/purchase-orders/:id/status", accessChecker(1), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const parsedStatus = Number(status);
+    if (![1, 3].includes(parsedStatus)) {
+      return res.status(400).json({ error: "狀態僅能更新為 1 或 3" });
+    }
+    await supplierController.updatePurchaseOrderStatus(id, parsedStatus);
+    res.status(200).json({ message: "狀態已更新" });
+  } catch (error) {
+    if (error.isBadRequest) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.isNotFound) {
+      return res.status(404).json({ error: error.message });
+    }
+    logger.error(error, req, "updatePurchaseOrderStatus");
+    res.status(500).json({ error: "更新叫貨紀錄狀態失敗" });
+  }
+});
+
 export default router;
