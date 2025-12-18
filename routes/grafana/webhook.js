@@ -29,20 +29,17 @@ router.post("/", async (req, res) => {
     ).toLowerCase();
 
     if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) {
-      logger.error(
-        new Error("缺少 LINE Channel Access Token"),
-        req,
-        "GrafanaWebhook"
-      );
+      const err = new Error("缺少 LINE Channel Access Token");
+      logger.error(err, req, "GrafanaWebhook");
       return res
         .status(500)
         .json({ error: "伺服器未設定 LINE Channel Access Token" });
     }
 
-    // 僅處理 firing 告警，避免已恢復狀態重複推播
+    // 僅處理 firing 事件，其他狀態直接略過
     if (status && status !== "firing") {
       logger.info(`Grafana webhook 已忽略，status=${status}`, "GrafanaWebhook");
-      return res.status(200).json({ message: "已忽略（非 firing 狀態）" });
+      return res.status(200).json({ message: "已忽略，非 firing 事件" });
     }
 
     const alertType = payload?.commonLabels?.alert_type;
@@ -51,12 +48,12 @@ router.post("/", async (req, res) => {
         `不支援的 grafana alert_type=${alertType || "unknown"}`,
         "GrafanaWebhook"
       );
-      return res.status(200).json({ message: "已忽略（不支援的 alert_type）" });
+      return res.status(200).json({ message: "已忽略，不支援的 alert_type" });
     }
 
     const alertInfos = parseStockAlertPayload(payload);
     if (!alertInfos || alertInfos.length === 0) {
-      return res.status(400).json({ error: "告警內容無效" });
+      return res.status(400).json({ error: "警報內容無效" });
     }
 
     const admins = await permissionController.getEmployeesByPermissionLevel(
@@ -66,7 +63,7 @@ router.post("/", async (req, res) => {
 
     if (adminLineIds.length === 0) {
       logger.warn("找不到可推播的管理員帳號", "GrafanaWebhook");
-      return res.status(200).json({ message: "目前沒有管理員訂閱者" });
+      return res.status(200).json({ message: "目前沒有管理員可推播" });
     }
 
     let delivered = 0;
@@ -81,7 +78,7 @@ router.post("/", async (req, res) => {
             });
             return { lineId, ok: true };
           } catch (error) {
-            error.msg = `推播至管理員 ${lineId} 失敗`;
+            error.msg = `推播管理員 ${lineId} 失敗`;
             logger.error(error, null, "GrafanaWebhook");
             return { lineId, ok: false };
           }
@@ -91,18 +88,16 @@ router.post("/", async (req, res) => {
     }
 
     logger.info(
-      `Grafana 告警已推播 ${delivered}/${
+      `Grafana 警報已推播 ${delivered}/${
         adminLineIds.length * alertInfos.length
-      } 則`,
+      } 筆`,
       "GrafanaWebhook"
     );
-    res
-      .status(200)
-      .json({
-        delivered,
-        admins: adminLineIds.length,
-        alerts: alertInfos.length,
-      });
+    res.status(200).json({
+      delivered,
+      admins: adminLineIds.length,
+      alerts: alertInfos.length,
+    });
   } catch (err) {
     err.msg = "Grafana webhook 處理失敗";
     logger.error(err, req, "GrafanaWebhook");
@@ -110,9 +105,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// 未匹配的子路由
+// 兜底路由
 router.use((req, res) => {
-  res.status(404).json({ error: "未知的 Grafana webhook 路徑" });
+  res.status(404).json({ error: "未知的 Grafana webhook 路由" });
 });
 
 function parseStockAlertPayload(payload) {
@@ -132,6 +127,8 @@ function parseStockAlertPayload(payload) {
         .trim()
         .toUpperCase();
       const labelName =
+        labels.material_name ||
+        payload?.commonLabels?.material_name ||
         labels.label ||
         payload?.commonLabels?.label ||
         labels.alertname ||
@@ -141,7 +138,7 @@ function parseStockAlertPayload(payload) {
         payload?.commonAnnotations?.summary ||
         labels.alertname ||
         payload?.title ||
-        "庫存警告";
+        "庫存警報";
 
       const generatorURL = alert.generatorURL || alert.generatorUrl;
       const dashboardURL =
@@ -182,46 +179,46 @@ function getStockLevelMeta(alertType, level) {
   const pctMap = {
     A: {
       title: "A 級 - 低於 20%",
-      description: "庫存低於 20%，請安排補貨。",
+      description: "庫存低於 20%，請盡快補貨。",
       color: WARN_COLOR,
-      typeLabel: "庫存警告",
+      typeLabel: "庫存警報",
     },
     B: {
       title: "B 級 - 低於 10%",
-      description: "庫存低於 10%，請盡快補貨。",
+      description: "庫存低於 10%，請立即補貨。",
       color: WARN_COLOR,
-      typeLabel: "庫存警告",
+      typeLabel: "庫存警報",
     },
     C: {
-      title: "C 級 - 庫存耗盡",
-      description: "庫存為 0，請立即補貨或暫停販售。",
+      title: "C 級 - 庫存見底",
+      description: "庫存為 0，請立刻補貨或暫停販售。",
       color: DANGER_COLOR,
-      typeLabel: "庫存警告",
+      typeLabel: "庫存警報",
     },
   };
 
   const expMap = {
     A: {
       title: "A 級 - 三天內到期",
-      description: "效期三天內，請優先使用或處理。",
+      description: "將於三天內到期，請優先使用或調整採購。",
       color: WARN_COLOR,
-      typeLabel: "效期警告",
+      typeLabel: "效期警報",
     },
     B: {
       title: "B 級 - 一天內到期",
-      description: "效期一天內，請立即處理或下架。",
+      description: "將於一天內到期，請立刻處理或下架。",
       color: DANGER_COLOR,
-      typeLabel: "效期警告",
+      typeLabel: "效期警報",
     },
   };
 
   const map = alertType === "stock_exp" ? expMap : pctMap;
-  const fallbackLabel = alertType === "stock_exp" ? "效期警告" : "庫存警告";
+  const fallbackLabel = alertType === "stock_exp" ? "效期警報" : "庫存警報";
 
   return (
     map[upper] || {
       title: `${upper || "未知"} 級`,
-      description: "未定義的告警等級，請檢查 Grafana 設定。",
+      description: "不明的警報等級，請檢查 Grafana 設定。",
       color: ACCENT_COLOR,
       typeLabel: fallbackLabel,
     }
@@ -246,7 +243,7 @@ function buildStockAlertFlex(info) {
       style: "primary",
       height: "sm",
       color: PRIMARY_COLOR,
-      action: { type: "uri", label: "查看面板", uri: info.panelURL },
+      action: { type: "uri", label: "開啟面板", uri: info.panelURL },
     });
   } else if (info.dashboardURL) {
     footerButtons.push({
@@ -254,7 +251,7 @@ function buildStockAlertFlex(info) {
       style: "primary",
       height: "sm",
       color: PRIMARY_COLOR,
-      action: { type: "uri", label: "查看儀表板", uri: info.dashboardURL },
+      action: { type: "uri", label: "開啟儀表板", uri: info.dashboardURL },
     });
   }
   if (info.silenceURL) {
@@ -263,7 +260,7 @@ function buildStockAlertFlex(info) {
       style: "secondary",
       height: "sm",
       color: "#ffffff",
-      action: { type: "uri", label: "暫停此告警", uri: info.silenceURL },
+      action: { type: "uri", label: "靜音此警報", uri: info.silenceURL },
     });
   }
 
@@ -317,7 +314,7 @@ function buildStockAlertFlex(info) {
             contents: [
               {
                 type: "text",
-                text: "原料",
+                text: "名稱",
                 color: SUBTEXT_COLOR,
                 flex: 2,
                 size: "sm",
@@ -410,7 +407,7 @@ function buildStockAlertFlex(info) {
             : [
                 {
                   type: "text",
-                  text: "未提供 Grafana 連結",
+                  text: "沒有 Grafana 連結",
                   color: SUBTEXT_COLOR,
                   size: "xs",
                   align: "center",
