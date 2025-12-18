@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -16,37 +16,41 @@ import {
   Box,
   TextField,
   IconButton,
-} from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import SaveIcon from '@mui/icons-material/Save';
-import CancelIcon from '@mui/icons-material/Cancel';
-import { getStockHistory, updateInventoryDetail } from '../api/inventory';
+  useMediaQuery,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
+import CancelIcon from "@mui/icons-material/Cancel";
+import { getStockHistory, updateInventoryDetail } from "../api/inventory";
 
 const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [earliestExpiryDays, setEarliestExpiryDays] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [editedRemainingQty, setEditedRemainingQty] = useState('');
-  const [editedExpiry, setEditedExpiry] = useState('');
-  const [editError, setEditError] = useState('');
+  const [editedRemainingQty, setEditedRemainingQty] = useState("");
+  const [editedExpiry, setEditedExpiry] = useState("");
+  const [editError, setEditError] = useState("");
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
   const formatDateTimeLocal = (date) => {
-    const pad = (n) => String(n).padStart(2, '0');
+    const pad = (n) => String(n).padStart(2, "0");
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
   const getStatus = (expiryTime) => {
-    if (!expiryTime) return { text: '未設定', color: 'text.secondary', daysLeft: null, statusType: 'no-expiry' };
+    if (!expiryTime) return { text: "未設定", color: "text.secondary", daysLeft: null, statusType: "no-expiry" };
     const expireDate = new Date(expiryTime);
     const now = new Date();
     const diffTime = expireDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (expireDate < now) return { text: '已過期', color: 'error', daysLeft: diffDays, statusType: 'expired' };
+    if (expireDate < now) return { text: "已過期", color: "error", daysLeft: diffDays, statusType: "expired" };
     const soon = new Date(now);
     soon.setDate(now.getDate() + 7);
-    if (expireDate < soon) return { text: '即將過期', color: 'warning', daysLeft: diffDays, statusType: 'soon-expired' };
-    return { text: '正常', color: 'success', daysLeft: diffDays, statusType: 'normal' };
+    if (expireDate < soon) return { text: "即將到期", color: "warning", daysLeft: diffDays, statusType: "soon-expired" };
+    return { text: "正常", color: "success", daysLeft: diffDays, statusType: "normal" };
   };
 
   const fetchHistory = useCallback(async () => {
@@ -59,7 +63,7 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
       let minDaysLeft = null;
       currentHistory.forEach((record) => {
         const status = getStatus(record.expiry_time);
-        if (status.statusType === 'normal' || status.statusType === 'soon-expired') {
+        if (status.statusType === "normal" || status.statusType === "soon-expired") {
           if (minDaysLeft === null || status.daysLeft < minDaysLeft) {
             minDaysLeft = status.daysLeft;
           }
@@ -82,14 +86,14 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
   const handleEditClick = (record) => {
     setEditingId(record.inventory_id);
     setEditedRemainingQty(record.remaining_qty.toString());
-    setEditedExpiry(record.expiry_time ? formatDateTimeLocal(new Date(record.expiry_time)) : '');
-    setEditError('');
+    setEditedExpiry(record.expiry_time ? formatDateTimeLocal(new Date(record.expiry_time)) : "");
+    setEditError("");
   };
 
   const handleSaveClick = async (recordId, stockInQty) => {
     const newQty = Number(editedRemainingQty);
     if (isNaN(newQty) || newQty < 0) {
-      setEditError('請輸入有效的剩餘量');
+      setEditError("請輸入正確的數值");
       return;
     }
     if (newQty > stockInQty) {
@@ -97,7 +101,7 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
       return;
     }
     if (!editedExpiry) {
-      setEditError('請輸入過期時間');
+      setEditError("請輸入到期時間");
       return;
     }
 
@@ -107,33 +111,35 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
         expiry_time: new Date(editedExpiry).toISOString(),
       });
       setEditingId(null);
-      setEditedRemainingQty('');
-      setEditedExpiry('');
-      setEditError('');
+      setEditedRemainingQty("");
+      setEditedExpiry("");
+      setEditError("");
       fetchHistory();
       if (onRecordUpdated) onRecordUpdated();
     } catch (error) {
-      console.error('更新剩餘量失敗:', error);
-      setEditError('更新失敗，請稍後再試');
+      console.error("更新剩餘量失敗", error);
+      setEditError("更新失敗，請稍後再試");
     }
   };
 
   const handleCancelClick = () => {
     setEditingId(null);
-    setEditedRemainingQty('');
-    setEditedExpiry('');
-    setEditError('');
+    setEditedRemainingQty("");
+    setEditedExpiry("");
+    setEditError("");
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={fullScreen}>
       <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">入庫紀錄 <Typography component="span" variant="h6" color="primary">{bomName}</Typography></Typography>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="h6">
+            庫存紀錄：<Typography component="span" variant="h6" color="primary">{bomName}</Typography>
+          </Typography>
           <Typography variant="body1" color="text.secondary">
             {earliestExpiryDays !== null && earliestExpiryDays >= 0
-              ? `最早到期 ${earliestExpiryDays} 天`
-              : '目前皆已過期或尚無資料'}
+              ? `最近到期：${earliestExpiryDays} 天`
+              : "目前沒有未過期庫存"}
           </Typography>
         </Box>
       </DialogTitle>
@@ -141,14 +147,14 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
         {loading ? (
           <p>載入中...</p>
         ) : (
-          <TableContainer component={Paper} variant="outlined">
+          <TableContainer component={Paper} variant="outlined" sx={{ overflowX: "auto" }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>入庫時間</TableCell>
                   <TableCell align="right">入庫量</TableCell>
                   <TableCell align="right">剩餘量</TableCell>
-                  <TableCell align="center">過期時間</TableCell>
+                  <TableCell align="center">到期時間</TableCell>
                   <TableCell align="center">狀態</TableCell>
                   <TableCell align="right">剩餘天數</TableCell>
                   <TableCell align="center">操作</TableCell>
@@ -162,7 +168,14 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
                     return (
                       <TableRow
                         key={record.inventory_id}
-                        sx={{ backgroundColor: status.statusType === 'expired' ? 'rgba(255, 0, 0, 0.1)' : (status.statusType === 'soon-expired' ? 'rgba(255, 165, 0, 0.1)' : 'inherit') }}
+                        sx={{
+                          backgroundColor:
+                            status.statusType === "expired"
+                              ? "rgba(255, 0, 0, 0.1)"
+                              : status.statusType === "soon-expired"
+                              ? "rgba(255, 165, 0, 0.1)"
+                              : "inherit",
+                        }}
                       >
                         <TableCell>{new Date(record.stock_in_time).toLocaleString()}</TableCell>
                         <TableCell align="right">{record.stock_in_qty}</TableCell>
@@ -193,14 +206,14 @@ const StockHistoryDialog = ({ open, onClose, bomId, bomName, onRecordUpdated }) 
                               InputLabelProps={{ shrink: true }}
                             />
                           ) : (
-                            record.expiry_time ? new Date(record.expiry_time).toLocaleString() : 'N/A'
+                            record.expiry_time ? new Date(record.expiry_time).toLocaleString() : "N/A"
                           )}
                         </TableCell>
                         <TableCell align="center">
                           <Typography color={status.color} variant="body2">{status.text}</Typography>
                         </TableCell>
                         <TableCell align="right">
-                          {status.daysLeft !== null ? `${Math.max(0, status.daysLeft)} 天` : 'N/A'}
+                          {status.daysLeft !== null ? `${Math.max(0, status.daysLeft)} 天` : "N/A"}
                         </TableCell>
                         <TableCell align="center">
                           {isEditing ? (

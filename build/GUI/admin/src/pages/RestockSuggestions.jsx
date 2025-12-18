@@ -22,7 +22,9 @@ import {
   DialogActions,
   Divider,
   MenuItem,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { getAutoRestockList, applyAutoRestockOverrides } from '../api/autoRestock';
 import { createPurchaseOrders } from '../api/purchaseOrders';
 import { getMaterialSuppliers } from '../api/suppliers';
@@ -50,6 +52,8 @@ function RestockSuggestions() {
   const [selectedSupplierMap, setSelectedSupplierMap] = useState({});
   const [contactMode, setContactMode] = useState({});
   const [info, setInfo] = useState('');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // 手機視圖顯示橫向捲動
 
   const sortSuggestions = (list = []) => {
     const copy = [...list];
@@ -286,8 +290,8 @@ function RestockSuggestions() {
           <Typography>載入中...</Typography>
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
+        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+          <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>原料名稱</TableCell>

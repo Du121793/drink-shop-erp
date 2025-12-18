@@ -25,7 +25,10 @@ import {
   Collapse,
   Button,
   Paper,
+  IconButton,
+  useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import liff from "@line/liff";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
@@ -40,6 +43,7 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import HistoryEduIcon from "@mui/icons-material/HistoryEdu";
 import BusinessIcon from "@mui/icons-material/Business";
+import MenuIcon from "@mui/icons-material/Menu";
 import { useLiffInit } from "./hooks/useLiff";
 import api, { isTokenExpired } from "./api/axios";
 
@@ -62,48 +66,50 @@ const drawerWidth = 240;
 const lightTheme = createTheme({
   palette: {
     mode: "light",
-    primary: {
-      main: "#d35400",
-    },
-    background: {
-      default: "#f5f5f5",
-      paper: "#ffffff",
-    },
-    text: {
-      primary: "#333",
-      secondary: "#555",
-    },
+    primary: { main: "#d35400" },
+    background: { default: "#f5f5f5", paper: "#ffffff" },
+    text: { primary: "#333", secondary: "#555" },
   },
   components: {
     MuiAppBar: {
-      styleOverrides: {
-        root: {
-          backgroundColor: "#ffffff",
-          color: "#333",
-        },
-      },
+      styleOverrides: { root: { backgroundColor: "#ffffff", color: "#333" } },
     },
-    MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          backgroundColor: "#ffffff",
-        },
-      },
-    },
+    MuiDrawer: { styleOverrides: { paper: { backgroundColor: "#ffffff" } } },
   },
 });
 
 const menuItems = [
-  { key: "dashboard", text: "儀表板", path: "/", icon: <DashboardIcon />, minLevel: 2 },
+  {
+    key: "dashboard",
+    text: "儀表板",
+    path: "/",
+    icon: <DashboardIcon />,
+    minLevel: 2,
+  },
   {
     key: "menu",
     text: "菜單管理",
     icon: <RestaurantMenuIcon />,
     minLevel: 3,
     children: [
-      { text: "品項管理", path: "/menu/items", icon: <FastfoodIcon />, minLevel: 3 },
-      { text: "客製化選項管理", path: "/menu/options", icon: <SettingsSuggestIcon />, minLevel: 3 },
-      { text: "配方管理 (BOM)", path: "/menu/boms", icon: <CategoryIcon />, minLevel: 3 },
+      {
+        text: "品項管理",
+        path: "/menu/items",
+        icon: <FastfoodIcon />,
+        minLevel: 3,
+      },
+      {
+        text: "客製化選項管理",
+        path: "/menu/options",
+        icon: <SettingsSuggestIcon />,
+        minLevel: 3,
+      },
+      {
+        text: "配方管理 (BOM)",
+        path: "/menu/boms",
+        icon: <CategoryIcon />,
+        minLevel: 3,
+      },
     ],
   },
   {
@@ -112,10 +118,30 @@ const menuItems = [
     icon: <InventoryIcon />,
     minLevel: 1,
     children: [
-      { text: "補貨", path: "/inventory/restock", icon: <LocalShippingIcon />, minLevel: 1 },
-      { text: "補貨建議清單", path: "/inventory/suggestions", icon: <LightbulbIcon />, minLevel: 1 },
-      { text: "叫貨紀錄", path: "/inventory/orders", icon: <HistoryEduIcon />, minLevel: 1 },
-      { text: "供應商管理", path: "/inventory/suppliers", icon: <BusinessIcon />, minLevel: 3 },
+      {
+        text: "補貨",
+        path: "/inventory/restock",
+        icon: <LocalShippingIcon />,
+        minLevel: 1,
+      },
+      {
+        text: "補貨建議清單",
+        path: "/inventory/suggestions",
+        icon: <LightbulbIcon />,
+        minLevel: 1,
+      },
+      {
+        text: "採購紀錄",
+        path: "/inventory/orders",
+        icon: <HistoryEduIcon />,
+        minLevel: 1,
+      },
+      {
+        text: "供應商管理",
+        path: "/inventory/suppliers",
+        icon: <BusinessIcon />,
+        minLevel: 3,
+      },
     ],
   },
   {
@@ -124,13 +150,28 @@ const menuItems = [
     icon: <PeopleIcon />,
     minLevel: 1,
     children: [
-      { text: "個人資料", path: "/permissions/profile", icon: <PeopleIcon />, minLevel: 1 },
-      { text: "管理員工", path: "/permissions/manage", icon: <PeopleIcon />, minLevel: 5 },
+      {
+        text: "個人資料",
+        path: "/permissions/profile",
+        icon: <PeopleIcon />,
+        minLevel: 1,
+      },
+      {
+        text: "管理員工",
+        path: "/permissions/manage",
+        icon: <PeopleIcon />,
+        minLevel: 5,
+      },
     ],
   },
 ];
 
-function ProtectedRoute({ minLevel = 0, permissionLevel, permissionLoading, children }) {
+function ProtectedRoute({
+  minLevel = 0,
+  permissionLevel,
+  permissionLoading,
+  children,
+}) {
   if (permissionLoading) {
     return (
       <Box
@@ -145,7 +186,7 @@ function ProtectedRoute({ minLevel = 0, permissionLevel, permissionLoading, chil
       >
         <Paper sx={{ p: 3, textAlign: "center" }}>
           <Typography variant="h6" gutterBottom>
-            檢查權限中...
+            權限檢查中...
           </Typography>
           <Typography variant="body2" color="text.secondary">
             請稍候，我們正在驗證您的使用權限
@@ -181,16 +222,24 @@ function PermissionRedirector({ permissionLevel, permissionLoading }) {
 }
 
 function App() {
-  const { loading: liffLoading, error: liffError, profile, idToken } = useLiffInit();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const {
+    loading: liffLoading,
+    error: liffError,
+    profile,
+    idToken,
+  } = useLiffInit();
   const [openMenu, setOpenMenu] = React.useState(true);
   const [openInventoryMenu, setOpenInventoryMenu] = React.useState(true);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
   const [userName, setUserName] = React.useState("");
   const [backendToken, setBackendToken] = React.useState(null);
   const [permissionLevel, setPermissionLevel] = React.useState(0);
   const [permissionLoading, setPermissionLoading] = React.useState(true);
   const [tokenAttempted, setTokenAttempted] = React.useState(false);
 
-  // 交換 LIFF ID Token -> 後端 JWT，並統一放到 axios header
+  // 交換 LIFF ID Token -> 後端 JWT，並統一設置到 axios header
   React.useEffect(() => {
     const exchangeToken = async () => {
       if (!idToken || isTokenExpired(idToken)) {
@@ -229,7 +278,9 @@ function App() {
       } catch (err) {
         if (
           err?.response?.status === 401 ||
-          `${err?.response?.data?.error || ""}`.toLowerCase().includes("expired")
+          `${err?.response?.data?.error || ""}`
+            .toLowerCase()
+            .includes("expired")
         ) {
           try {
             liff?.logout?.();
@@ -249,7 +300,7 @@ function App() {
     exchangeToken();
   }, [idToken]);
 
-  // 載入個人資料與權限等級
+  // 讀取個人資料與權限
   React.useEffect(() => {
     const fetchMe = async () => {
       if (!idToken) {
@@ -278,8 +329,10 @@ function App() {
         } else if (profile?.displayName) {
           setUserName(profile.displayName);
           try {
-            await api.patch("/permissions/me", { employee_name: profile.displayName });
-          } catch (err) {
+            await api.patch("/permissions/me", {
+              employee_name: profile.displayName,
+            });
+          } catch {
             // ignore name sync failure
           }
         }
@@ -288,18 +341,24 @@ function App() {
           : [];
 
         let level = Number(
-          res.data?.permission_level ?? res.data?.employee?.permission_level ?? 0
+          res.data?.permission_level ??
+            res.data?.employee?.permission_level ??
+            0
         );
-        // 若後端未回傳權限等級但已有角色，嘗試自行計算最大權限值
+        // 若後端未回傳 permission_level 但已有角色，嘗試以角色最高權限回填
         if (level === 0 && rolesFromProfile.length > 0) {
           try {
             const rolesRes = await api.get("/permissions/roles");
             const roleMap = rolesRes.data?.roles || [];
-            const matched = roleMap.filter((r) => rolesFromProfile.includes(r.role_id));
+            const matched = roleMap.filter((r) =>
+              rolesFromProfile.includes(r.role_id)
+            );
             if (matched.length > 0) {
-              level = Math.max(...matched.map((r) => Number(r.permission_level || 0)));
+              level = Math.max(
+                ...matched.map((r) => Number(r.permission_level || 0))
+              );
             }
-          } catch (err) {
+          } catch {
             // ignore, fallback to 0
           }
         }
@@ -312,13 +371,19 @@ function App() {
       }
     };
     fetchMe();
-  }, [profile, backendToken]);
+  }, [profile, backendToken, idToken, tokenAttempted]);
 
   const handleToggle = (key) => {
     if (key === "menu") {
       setOpenMenu((prev) => !prev);
     } else if (key === "inventory") {
       setOpenInventoryMenu((prev) => !prev);
+    }
+  };
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setMobileOpen(false);
     }
   };
 
@@ -337,7 +402,11 @@ function App() {
           <List component="div" disablePadding>
             {item.children.map((child) => (
               <ListItem key={child.text} disablePadding sx={{ pl: 4 }}>
-                <ListItemButton component={RouterLink} to={child.path}>
+                <ListItemButton
+                  component={RouterLink}
+                  to={child.path}
+                  onClick={handleNavClick}
+                >
                   <ListItemIcon>{child.icon}</ListItemIcon>
                   <ListItemText primary={child.text} />
                 </ListItemButton>
@@ -357,7 +426,8 @@ function App() {
           const allowedChildren = item.children.filter(
             (child) => permissionLevel >= (child.minLevel ?? minLevel)
           );
-          if (permissionLevel < minLevel || allowedChildren.length === 0) return null;
+          if (permissionLevel < minLevel || allowedChildren.length === 0)
+            return null;
           return { ...item, children: allowedChildren };
         }
         if (permissionLevel < minLevel) return null;
@@ -391,10 +461,10 @@ function App() {
         >
           <Paper sx={{ p: 3, textAlign: "center" }}>
             <Typography variant="h6" gutterBottom>
-              LIFF 初始化中...
+              LIFF 啟動中...
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              請稍候，請先在 Line 登入
+              請稍候，請嘗試登入 LINE
             </Typography>
           </Paper>
         </Box>
@@ -417,12 +487,15 @@ function App() {
         >
           <Paper sx={{ p: 3, textAlign: "center" }}>
             <Typography variant="h6" gutterBottom>
-              LIFF 初始化失敗
+              LIFF 啟動失敗
             </Typography>
             <Typography variant="body2" color="error.main" sx={{ mb: 2 }}>
               {liffError}
             </Typography>
-            <Button variant="contained" onClick={() => window.location.reload()}>
+            <Button
+              variant="contained"
+              onClick={() => window.location.reload()}
+            >
               重新整理
             </Button>
           </Paper>
@@ -446,7 +519,7 @@ function App() {
         >
           <Paper sx={{ p: 3, textAlign: "center" }}>
             <Typography variant="h6" gutterBottom>
-              檢查權限中...
+              權限檢查中...
             </Typography>
             <Typography variant="body2" color="text.secondary">
               請稍候，我們正在驗證您的使用權限
@@ -466,132 +539,171 @@ function App() {
         />
         <Box sx={{ display: "flex", height: "100vh" }}>
           <CssBaseline />
-          <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+          <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
             <Toolbar>
+              {isMobile && (
+                <IconButton
+                  color="inherit"
+                  edge="start"
+                  onClick={() => setMobileOpen((prev) => !prev)}
+                  sx={{ mr: 2 }}
+                >
+                  <MenuIcon />
+                </IconButton>
+              )}
               <Typography variant="h6" noWrap component="div">
                 管理後台
               </Typography>
               {userName && (
-                <Typography variant="body1" sx={{ ml: 2, color: "text.secondary" }}>
+                <Typography
+                  variant="body1"
+                  sx={{ ml: 2, color: "text.secondary" }}
+                >
                   {userName}
                 </Typography>
               )}
             </Toolbar>
           </AppBar>
-          <Drawer
-            variant="permanent"
+          <Box
+            component="nav"
+            sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+            aria-label="sidebar navigation"
+          >
+            <Drawer
+              variant={isMobile ? "temporary" : "permanent"}
+              open={isMobile ? mobileOpen : true}
+              onClose={() => setMobileOpen(false)}
+              ModalProps={{ keepMounted: true }}
+              sx={{
+                "& .MuiDrawer-paper": {
+                  width: drawerWidth,
+                  boxSizing: "border-box",
+                },
+              }}
+            >
+              <Toolbar />
+              <Box sx={{ overflow: "auto" }}>
+                <List>
+                  {visibleMenuItems.map((item) =>
+                    item.children ? (
+                      renderCollapse(item)
+                    ) : (
+                      <ListItem key={item.key} disablePadding>
+                        <ListItemButton
+                          component={RouterLink}
+                          to={item.path}
+                          onClick={handleNavClick}
+                        >
+                          <ListItemIcon>{item.icon}</ListItemIcon>
+                          <ListItemText primary={item.text} />
+                        </ListItemButton>
+                      </ListItem>
+                    )
+                  )}
+                </List>
+              </Box>
+            </Drawer>
+          </Box>
+          <Box
+            component="main"
             sx={{
-              width: drawerWidth,
-              flexShrink: 0,
-              [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
+              flexGrow: 1,
+              display: "flex",
+              flexDirection: "column",
+              width: "100%",
+              px: 0,
+              pb: 0,
             }}
           >
-            <Toolbar />
-            <Box sx={{ overflow: "auto" }}>
-              <List>
-                {visibleMenuItems.map((item) =>
-                  item.children ? (
-                    renderCollapse(item)
-                  ) : (
-                    <ListItem key={item.key} disablePadding>
-                      <ListItemButton component={RouterLink} to={item.path}>
-                        <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} />
-                      </ListItemButton>
-                    </ListItem>
-                  )
-                )}
-              </List>
-            </Box>
-          </Drawer>
-          <Box component="main" sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
             <Toolbar />
             <Routes>
               <Route
                 path="/"
                 element={
-                  permissionLevel >= 2
-                    ? guard(<Dashboard />, 2)
-                    : permissionLevel >= 1
-                    ? <Navigate to="/inventory/suggestions" replace />
-                    : <Navigate to="/no-permission" replace />
+                  permissionLevel >= 2 ? (
+                    guard(<Dashboard />, 2)
+                  ) : permissionLevel >= 1 ? (
+                    <Navigate to="/inventory/suggestions" replace />
+                  ) : (
+                    <Navigate to="/no-permission" replace />
+                  )
                 }
               />
               <Route path="/no-permission" element={<NoPermission />} />
               <Route
                 path="/menu"
-                element={
-                  guard(
-                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
-                      <MenuManagement />
-                    </Box>,
-                    3
-                  )
-                }
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <MenuManagement />
+                  </Box>,
+                  3
+                )}
               >
                 <Route path="items" element={<MenuItemManagement />} />
                 <Route path="options" element={<CustomOptionManagement />} />
                 <Route path="boms" element={<BomManagement />} />
               </Route>
-              <Route path="/inventory" element={<Navigate to="/inventory/restock" replace />} />
+              <Route
+                path="/inventory"
+                element={<Navigate to="/inventory/restock" replace />}
+              />
               <Route
                 path="/inventory/restock"
-                element={
-                  guard(
-                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
-                      <Restock />
-                    </Box>,
-                    1
-                  )
-                }
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <Restock />
+                  </Box>,
+                  1
+                )}
               />
               <Route
                 path="/inventory/suggestions"
-                element={
-                  guard(
-                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
-                      <RestockSuggestions />
-                    </Box>,
-                    1
-                  )
-                }
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <RestockSuggestions />
+                  </Box>,
+                  1
+                )}
               />
               <Route
                 path="/inventory/orders"
-                element={
-                  guard(
-                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
-                      <PurchaseOrderLog />
-                    </Box>,
-                    1
-                  )
-                }
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <PurchaseOrderLog />
+                  </Box>,
+                  1
+                )}
               />
               <Route
                 path="/inventory/suppliers"
-                element={
-                  guard(
-                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
-                      <SupplierManagement />
-                    </Box>,
-                    3
-                  )
-                }
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <SupplierManagement />
+                  </Box>,
+                  3
+                )}
               />
               <Route
                 path="/permissions"
-                element={
-                  guard(
-                    <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
-                      <PermissionsLayout />
-                    </Box>,
-                    1
-                  )
-                }
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <PermissionsLayout />
+                  </Box>,
+                  1
+                )}
               >
-                <Route index element={<Navigate to="/permissions/profile" replace />} />
-                <Route path="profile" element={guard(<PermissionsProfile />, 1)} />
-                <Route path="manage" element={guard(<PermissionsManage />, 5)} />
+                <Route
+                  index
+                  element={<Navigate to="/permissions/profile" replace />}
+                />
+                <Route
+                  path="profile"
+                  element={guard(<PermissionsProfile />, 1)}
+                />
+                <Route
+                  path="manage"
+                  element={guard(<PermissionsManage />, 5)}
+                />
               </Route>
             </Routes>
           </Box>

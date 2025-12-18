@@ -61,6 +61,16 @@
         margin: 0 0 8px 0;
         word-break: break-all;
       }
+      .qr-name {
+        font-weight: 700;
+        font-size: 1em;
+        margin-bottom: 6px;
+      }
+      .qr-subtext {
+        font-size: 0.82em;
+        color: #555;
+        margin: 0 0 6px 0;
+      }
       .qr-actions {
         display: flex;
         flex-direction: column;
@@ -116,6 +126,7 @@
       const requestsContainer = document.getElementById("requests-container");
       const errorLog = document.getElementById("error-log");
       const loadingDiv = document.getElementById("loading");
+      const QR_CACHE_TTL_MS = 45 * 60 * 1000;
 
       function showError(message) {
         errorLog.textContent = `錯誤：${message}`;
@@ -204,6 +215,32 @@
         await updateOrderStatus(detailId, false, requestUUID, refund);
       }
 
+      function computeExpiresAt(request, item) {
+        const expires =
+          item.expiresAt ||
+          request.expiresAt ||
+          (request.createdAt
+            ? new Date(new Date(request.createdAt).getTime() + QR_CACHE_TTL_MS).toISOString()
+            : null);
+        return expires;
+      }
+
+      function formatRemainingTime(expiresAt) {
+        if (!expiresAt) return "剩餘時間：未知";
+        const ts = Date.parse(expiresAt);
+        if (!Number.isFinite(ts)) return "剩餘時間：未知";
+        const diff = ts - Date.now();
+        if (diff <= 0) return "剩餘時間：已逾期";
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        if (minutes >= 60) {
+          const hours = Math.floor(minutes / 60);
+          const mins = minutes % 60;
+          return `剩餘時間：${hours} 小時 ${mins} 分`;
+        }
+        return `剩餘時間：${minutes} 分 ${seconds.toString().padStart(2, "0")} 秒`;
+      }
+
       async function fetchAndDisplayQRCodes() {
         try {
           const response = await fetch("/api/order/cache");
@@ -239,8 +276,20 @@
               img.src = item.qrcode;
               img.alt = `QR Code for detailId ${item.detailId}`;
 
-              const text = document.createElement("p");
-              text.textContent = `明細 ID：${item.detailId}`;
+              const nameText = document.createElement("p");
+              nameText.className = "qr-name";
+              nameText.textContent =
+                item.productName ||
+                (item.productId ? `品項 #${item.productId}` : `明細 #${item.detailId}`);
+
+              const detailText = document.createElement("p");
+              detailText.className = "qr-subtext";
+              detailText.textContent = `明細 ID：${item.detailId}`;
+
+              const expiresAt = computeExpiresAt(request, item);
+              const remainText = document.createElement("p");
+              remainText.className = "qr-subtext";
+              remainText.textContent = formatRemainingTime(expiresAt);
 
               const actionsDiv = document.createElement("div");
               actionsDiv.className = "qr-actions";
@@ -268,7 +317,9 @@
               actionsDiv.appendChild(refundButton);
 
               qrItemDiv.appendChild(img);
-              qrItemDiv.appendChild(text);
+              qrItemDiv.appendChild(nameText);
+              qrItemDiv.appendChild(detailText);
+              qrItemDiv.appendChild(remainText);
               qrItemDiv.appendChild(actionsDiv);
               qrGrid.appendChild(qrItemDiv);
             }

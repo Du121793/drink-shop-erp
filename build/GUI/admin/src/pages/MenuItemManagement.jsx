@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Typography,
   Table,
@@ -13,38 +13,35 @@ import {
   Box,
   Switch,
   Chip,
-} from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import { 
-  getMenus, 
-  createMenu, 
+} from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import {
+  getMenus,
+  createMenu,
   updateMenu,
   deleteMenu,
   getMenuOptions,
   getMenuMaterials,
   getAllCustomOptions,
-} from '../api/menu';
-import MenuEditDialog from '../components/MenuEditDialog';
+} from "../api/menu";
+import MenuEditDialog from "../components/MenuEditDialog";
 
+// 品項管理（桌機表格、手機可橫向捲動）
 function MenuItemManagement() {
   const [menus, setMenus] = useState([]);
   const [customOptions, setCustomOptions] = useState([]);
-  
   const [isMenuEditDialogOpen, setMenuEditDialogOpen] = useState(false);
   const [editingMenuItem, setEditingMenuItem] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [menusRes, optionsRes] = await Promise.all([
-        getMenus(true),
-        getAllCustomOptions(),
-      ]);
+      const [menusRes, optionsRes] = await Promise.all([getMenus(true), getAllCustomOptions()]);
       setMenus(menusRes.data.menus);
       setCustomOptions(optionsRes.data.options || []);
     } catch (error) {
-      console.error('Failed to fetch menus:', error);
+      console.error("Failed to fetch menus:", error);
     }
   }, []);
 
@@ -57,10 +54,10 @@ function MenuItemManagement() {
       try {
         const [optionsRes, materialsRes] = await Promise.all([
           getMenuOptions(item.id),
-          getMenuMaterials(item.id)
+          getMenuMaterials(item.id),
         ]);
-        setEditingMenuItem({ 
-          ...item, 
+        setEditingMenuItem({
+          ...item,
           options: optionsRes.data.options,
           baseMaterials: materialsRes.data.materials,
         });
@@ -88,20 +85,20 @@ function MenuItemManagement() {
       }
       fetchData();
     } catch (error) {
-      console.error('Failed to save menu item:', error);
+      console.error("Failed to save menu item:", error);
     } finally {
       handleMenuDialogClose();
     }
   };
 
   const handleDeleteMenu = async (itemId) => {
-    if (window.confirm('確定要永久刪除這個品項嗎？此操作無法復原。')) {
-        try {
-            await deleteMenu(itemId);
-            fetchData();
-        } catch (error) {
-            console.error('Failed to delete menu item:', error);
-        }
+    if (window.confirm("確認要永久刪除這個品項？此動作無法復原。")) {
+      try {
+        await deleteMenu(itemId);
+        fetchData();
+      } catch (error) {
+        console.error("Failed to delete menu item:", error);
+      }
     }
   };
 
@@ -110,25 +107,29 @@ function MenuItemManagement() {
       await updateMenu(id, { is_active: newIsActive });
       fetchData();
     } catch (error) {
-      console.error('Failed to toggle active state:', error);
+      console.error("Failed to toggle active state:", error);
     }
   };
 
   return (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" gutterBottom>品項管理</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleMenuDialogClickOpen()}>新增品項</Button>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Typography variant="h4" gutterBottom>
+          品項管理
+        </Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleMenuDialogClickOpen()}>
+          新增品項
+        </Button>
       </Box>
-      <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table>
+      <TableContainer component={Paper} sx={{ mb: 4, overflowX: "auto" }}>
+        <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>品項名稱</TableCell>
               <TableCell align="center">上架狀態</TableCell>
-              <TableCell align="center">庫存狀態</TableCell>
+              <TableCell align="center">庫存充足</TableCell>
               <TableCell align="right">價格</TableCell>
-              <TableCell align="right">操作</TableCell>
+              <TableCell align="right">動作</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -143,16 +144,20 @@ function MenuItemManagement() {
                   />
                 </TableCell>
                 <TableCell align="center">
-                  <Chip 
-                    label={menu.isAvailable ? '充足' : '不足'} 
-                    color={menu.isAvailable ? 'success' : 'error'} 
+                  <Chip
+                    label={menu.isAvailable ? "充足" : "不足"}
+                    color={menu.isAvailable ? "success" : "error"}
                     size="small"
                   />
                 </TableCell>
                 <TableCell align="right">{menu.price}</TableCell>
                 <TableCell align="right">
-                  <IconButton onClick={() => handleMenuDialogClickOpen(menu)}><EditIcon /></IconButton>
-                  <IconButton onClick={() => handleDeleteMenu(menu.id)}><DeleteIcon /></IconButton>
+                  <IconButton onClick={() => handleMenuDialogClickOpen(menu)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDeleteMenu(menu.id)}>
+                    <DeleteIcon />
+                  </IconButton>
                 </TableCell>
               </TableRow>
             ))}

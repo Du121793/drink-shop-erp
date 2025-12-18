@@ -13,7 +13,9 @@ import {
   LinearProgress,
   TableSortLabel,
   IconButton,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
 // import AddIcon from '@mui/icons-material/Add'; // 頂部 BOM 相關按鈕移除
 // import EditIcon from '@mui/icons-material/Edit'; // BOM 編輯按鈕移除
@@ -97,6 +99,8 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState('asc');
   const [orderBy, setOrderBy] = useState('bom_name');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // 手機版改為卡片視圖
   
   const [isHistoryOpen, setHistoryOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState({ id: null, name: null, shelfLifeDays: null });
@@ -222,8 +226,64 @@ function Inventory({ title = '庫存管理與補貨建議', showRestockButton = 
         {/* <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleBomEditClick()}>新增原料</Button> */}
       </Box>
 
-      {loading ? <p>讀取中...</p> : (
-        <TableContainer component={Paper}>
+      {loading ? (
+        <p>讀取中...</p>
+      ) : isMobile ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2 }}>
+          {visibleRows.map((item) => (
+            <Paper
+              key={item.bom_id}
+              sx={{
+                p: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                backgroundColor: item.stock_level < 20 ? 'rgba(255,0,0,0.03)' : 'background.paper',
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{item.bom_name}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  上限：{item.max_stock_qty || 'N/A'}
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>庫存：{item.total_stock}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Box sx={{ width: '100%', mr: 1 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(item.stock_level, 100)}
+                    color={getHealthColor(item.stock_level)}
+                  />
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 44 }}>
+                  {`${Math.round(item.stock_level)}%`}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  size="small"
+                  onClick={() => handleHistoryClick(item)}
+                >
+                  查看紀錄
+                </Button>
+                {showRestockButton && (
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    size="small"
+                    onClick={() => handleRestockClick(item)}
+                  >
+                    補貨
+                  </Button>
+                )}
+              </Box>
+            </Paper>
+          ))}
+        </Box>
+      ) : (
+        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
           <Table sx={{ minWidth: 750 }}>
             <EnhancedTableHead
               order={order}

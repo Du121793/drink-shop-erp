@@ -1,67 +1,124 @@
 import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import * as logger from "../methods/logger.js";
+import { updateOrderStatus } from "../SQL_controller/order.js";
+import { QR_CODE_TTL_MS } from "../config/constants.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 快取目錄的路徑
 const cacheDir = path.join(__dirname, "../cache");
-// 檔案最大存留時間 (45 分鐘)
-const MAX_AGE = 45 * 60 * 1000; // 45 分鐘的毫秒數
+const cacheFile = path.join(cacheDir, "order.json");
 
 /**
- * 清理過期的快取檔案
+ * 回收超時未處理的訂單 QR：退回庫存並從快取移除
  */
-function cleanupCache() {
-  // logger.info('開始執行快取清理...', 'Corn');
-  fs.readdir(cacheDir, (err, files) => {
-    if (err) {
-      logger.error({ msg: "讀取快取目錄時發生錯誤", err }, null, "Corn");
-      return;
-    }
+async function cleanupExpiredOrders() {
+  try {
+    const raw = await fsPromises.readFile(cacheFile, "utf-8");
+    const cacheData = JSON.parse(raw);
+    if (!Array.isArray(cacheData) || cacheData.length === 0) return;
 
-    files.forEach((file) => {
-      const filePath = path.join(cacheDir, file);
-      fs.stat(filePath, (err, stats) => {
-        if (err) {
-          logger.error(
-            { msg: `無法取得檔案 ${file} 的資訊`, err },
-            null,
+    const now = Date.now();
+    const remaining = [];
+
+    for (const request of cacheData) {
+      const createdAtMs = Date.parse(request.createdAt || request.created_at);
+      const expiresAtMs = request.expiresAt
+        ? Date.parse(request.expiresAt)
+        : Number.isFinite(createdAtMs)
+        ? createdAtMs + QR_CODE_TTL_MS
+        : NaN;
+      const isExpired = Number.isFinite(expiresAtMs) ? now >= expiresAtMs : false;
+
+      if (!isExpired) {
+        remaining.push(request);
+        continue;
+      }
+
+      let failed = false;
+      const qrcodes = Array.isArray(request.qrcodes) ? request.qrcodes : [];
+
+      for (const qr of qrcodes) {
+        const detailId = qr?.detailId ?? qr?.detail_id;
+        if (!detailId) continue;
+        try {
+          await updateOrderStatus(Number(detailId), false, true);
+          logger.info(
+            `Expired QR detail #${detailId} rolled back (UUID ${request.requestUUID || "unknown"})`,
             "Corn"
           );
-          return;
+        } catch (err) {
+          failed = true;
+          err.msg = `超時 QR detail #${detailId} 回收庫存失敗`;
+          logger.error(err, null, "Corn");
         }
+      }
 
-        const now = new Date().getTime();
-        const fileAge = now - stats.mtime.getTime();
+      if (failed) {
+        // 保留資料，下一輪再嘗試，避免遺漏
+        remaining.push(request);
+      } else {
+        logger.info(
+          `Expired request ${request.requestUUID || "unknown"} cleaned and stock returned`,
+          "Corn"
+        );
+      }
+    }
 
-        if (fileAge > MAX_AGE) {
-          fs.unlink(filePath, (err) => {
-            if (err) {
-              logger.error(
-                { msg: `刪除檔案 ${file} 時發生錯誤`, err },
-                null,
-                "Corn"
-              );
-            } else {
-              logger.info(`已刪除過期的快取檔案: ${file}`, "Corn");
-            }
-          });
-        }
-      });
-    });
-  });
+    await fsPromises.writeFile(cacheFile, JSON.stringify(remaining, null, 2));
+  } catch (err) {
+    if (err.code === "ENOENT") return; // 尚未有快取檔
+    err.msg = "清理過期 QR cache 時發生錯誤";
+    logger.error(err, null, "Corn");
+  }
+}
+
+/**
+ * 清除其他超過 TTL 的快取檔案
+ */
+async function cleanupStaleFiles() {
+  try {
+    const files = await fsPromises.readdir(cacheDir);
+    const now = Date.now();
+    for (const file of files) {
+      if (file === "order.json") continue;
+      const filePath = path.join(cacheDir, file);
+      const stats = await fsPromises.stat(filePath);
+      if (!stats.isFile()) continue;
+      const age = now - stats.mtime.getTime();
+      if (age > QR_CODE_TTL_MS) {
+        await fsPromises.unlink(filePath);
+        logger.info(`已刪除過期快取檔案: ${file}`, "Corn");
+      }
+    }
+  } catch (err) {
+    if (err.code === "ENOENT") return;
+    err.msg = "清理快取檔案時發生錯誤";
+    logger.error(err, null, "Corn");
+  }
+}
+
+async function cleanupCache() {
+  await fsPromises.mkdir(cacheDir, { recursive: true });
+  await Promise.allSettled([cleanupExpiredOrders(), cleanupStaleFiles()]);
 }
 
 /**
  * 啟動快取清理排程
  */
 function start() {
-  // 每 30 秒執行一次清理函式
-  setInterval(cleanupCache, 30 * 1000);
-  logger.info("快取清理服務已啟動，每 30 秒執行一次。", "Corn");
+  const run = () =>
+    cleanupCache().catch((err) => {
+      err.msg = "快取清理排程執行失敗";
+      logger.error(err, null, "Corn");
+    });
+
+  run();
+  setInterval(run, 30 * 1000);
+  logger.info("快取清理排程已啟動，每30秒執行一次。", "Corn");
 }
 
 export { start };

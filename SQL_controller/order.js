@@ -3,22 +3,34 @@ import * as logger from "../methods/logger.js";
 import { getStockByBomId, deductStock, returnStock } from "./inventory.js";
 
 async function ensureProductsActive(client, productIds = []) {
-  if (!productIds.length) return;
+  const statusMap = new Map();
+  if (!productIds.length) return statusMap;
+
   const res = await client.query(
-    "SELECT product_id, is_active FROM product WHERE product_id = ANY($1::int[])",
+    "SELECT product_id, is_active, product_name FROM product WHERE product_id = ANY($1::int[])",
     [productIds]
   );
-  const statusMap = new Map(res.rows.map((r) => [r.product_id, r.is_active === true]));
+
+  for (const row of res.rows) {
+    statusMap.set(row.product_id, {
+      isActive: row.is_active === true,
+      productName: row.product_name,
+    });
+  }
+
   for (const pid of productIds) {
-    const active = statusMap.get(pid);
-    if (!active) {
-      const err = new Error(`商品 ${pid} 未上架，無法下單`);
+    const info = statusMap.get(pid);
+    if (!info?.isActive) {
+      const err = new Error(`商品 ${pid} 無法販售，請確認是否已上架或可販售。`);
       err.isActiveError = true;
       err.productId = pid;
       throw err;
     }
   }
+
+  return statusMap;
 }
+
 
 /**
  * 查詢產品及其選項總需求量
@@ -58,7 +70,7 @@ async function createOrder(orderItems) {
 
   try {
     const productIds = [...new Set(orderItems.map((o) => o.menuId))];
-    await ensureProductsActive(client, productIds);
+    const productInfoMap = await ensureProductsActive(client, productIds);
 
     const flattenedItems = [];
     const totalRequirements = new Map();
@@ -128,6 +140,7 @@ async function createOrder(orderItems) {
       processedItems.push({
         detailId: detailId,
         productId: item.productId,
+        productName: productInfoMap.get(item.productId)?.productName || "",
         materialRequirements: Object.fromEntries(item.requirements),
       });
     }
@@ -229,7 +242,9 @@ async function reorderSingle(detailId) {
     );
     const optionIds = optionsRes.rows.map((r) => r.option_detail_id);
 
-    await ensureProductsActive(client, [productId]);
+    const productInfoMap = await ensureProductsActive(client, [productId]);
+    const productInfo = productInfoMap.get(productId);
+    const productName = productInfo?.productName || "";
     const requirements = await getMaterialRequirements(client, productId, optionIds);
     for (const [bomId, qty] of requirements.entries()) {
       const available = await getStockByBomId(bomId);
@@ -264,6 +279,7 @@ async function reorderSingle(detailId) {
     return {
       detailId: newDetailId,
       productId,
+      productName,
       materialRequirements: Object.fromEntries(requirements),
     };
   } catch (error) {

@@ -5,6 +5,7 @@ import path from "path";
 import * as logger from "../methods/logger.js";
 import * as orderController from "../SQL_controller/order.js";
 import { generateQRCode } from "../methods/QR_code_generate.js";
+import { QR_CODE_TTL_MS } from "../config/constants.js";
 
 const router = express.Router();
 const cacheDir = path.resolve(process.cwd(), "cache");
@@ -21,18 +22,23 @@ router.post("/", async (req, res) => {
 
   try {
     const processedItems = await orderController.createOrder(orderItems);
+    const expiresAt = new Date(Date.now() + QR_CODE_TTL_MS).toISOString();
 
     const qrcodes = [];
     for (const item of processedItems) {
       const payload = {
         productId: item.productId,
         detailId: item.detailId,
+        productName: item.productName,
         requestUUID,
         materials: item.materialRequirements,
       };
       const qrCodeBase64 = await generateQRCode(payload);
       qrcodes.push({
         detailId: item.detailId,
+        productId: item.productId,
+        productName: item.productName,
+        expiresAt,
         qrcode: qrCodeBase64,
       });
     }
@@ -50,6 +56,7 @@ router.post("/", async (req, res) => {
     cacheData.push({
       requestUUID,
       createdAt: new Date().toISOString(),
+      expiresAt,
       qrcodes,
     });
 
@@ -132,9 +139,11 @@ router.post("/reorder", async (req, res) => {
     }
 
     const result = await orderController.reorderSingle(detailId);
+    const expiresAt = new Date(Date.now() + QR_CODE_TTL_MS).toISOString();
     const payload = {
       productId: result.productId,
       detailId: result.detailId,
+      productName: result.productName,
       requestUUID,
       materials: result.materialRequirements,
     };
@@ -149,12 +158,22 @@ router.post("/reorder", async (req, res) => {
       );
 
       if (requestIndex > -1) {
+        if (!cacheData[requestIndex].expiresAt) {
+          cacheData[requestIndex].expiresAt =
+            cacheData[requestIndex].createdAt || expiresAt;
+        }
         cacheData[requestIndex].qrcodes = cacheData[requestIndex].qrcodes.filter(
           (qr) => qr.detailId !== Number(detailId)
         );
 
         cacheData[requestIndex].qrcodes.push({
           detailId: result.detailId,
+          productId: result.productId,
+          productName: result.productName,
+          expiresAt:
+            cacheData[requestIndex].expiresAt ||
+            cacheData[requestIndex].createdAt ||
+            expiresAt,
           qrcode: qrCodeBase64,
         });
       }
