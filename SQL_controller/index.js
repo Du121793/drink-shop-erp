@@ -3,3 +3,4 @@
 
 export * from "./db_connect.js";
 export * from "./suggestion.js";
+export * from "./restockRule.js";

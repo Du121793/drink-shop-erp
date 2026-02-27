@@ -1,7 +1,8 @@
-import express from "express";
+﻿import express from "express";
 import * as suggestionController from "../SQL_controller/suggestion.js";
-import { calculateRestockSuggestions } from "../methods/suggestion_calculator.js";
+import { calculateRestockSuggestionsByRules } from "../methods/restock_rules/engine.js";
 import * as supplierController from "../SQL_controller/supplier.js";
+import * as restockRuleController from "../SQL_controller/restockRule.js";
 import * as logger from "../methods/logger.js";
 import { accessChecker } from "../middleware/accessChecker.js";
 
@@ -10,11 +11,7 @@ const router = express.Router();
 // 建立補貨建議（同 line webhook 邏輯）
 async function buildSuggestions() {
   const materialStats = await suggestionController.getMaterialStats();
-  return calculateRestockSuggestions(materialStats, {
-    consumptionThresholdPercent: 0.15,
-    criticalStockPercent: 0.10,
-    safetyStockPercent: 0.25,
-  });
+  return calculateRestockSuggestionsByRules(materialStats);
 }
 
 // 附帶預設廠商資訊
@@ -73,4 +70,123 @@ router.patch("/", accessChecker(1), async (req, res) => {
   }
 });
 
+// 規則管理
+router.get("/rules", accessChecker(1), async (req, res) => {
+  try {
+    const rules = await restockRuleController.getRestockRules();
+    res.status(200).json({ rules });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:get");
+    res.status(500).json({ error: "取得規則清單失敗" });
+  }
+});
+
+router.post("/rules", accessChecker(5), async (req, res) => {
+  try {
+    const { rule_name, rule_type } = req.body || {};
+    if (!rule_name || !rule_type) {
+      return res.status(400).json({ error: "請提供規則名稱與類型" });
+    }
+    const ruleId = await restockRuleController.createRestockRule(req.body);
+    res.status(201).json({ message: "OK", rule_id: ruleId });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:post");
+    res.status(500).json({ error: "新增規則失敗" });
+  }
+});
+
+router.patch("/rules/:id", accessChecker(5), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await restockRuleController.updateRestockRule(Number(id), req.body || {});
+    res.status(200).json({ message: "OK" });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:patch");
+    res.status(500).json({ error: "更新規則失敗" });
+  }
+});
+
+router.get("/rules/:id/usage", accessChecker(5), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usage = await restockRuleController.getRestockRuleUsage(Number(id));
+    res.status(200).json({ usage });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:usage");
+    res.status(500).json({ error: "取得規則使用情況失敗" });
+  }
+});
+
+router.delete("/rules/:id", accessChecker(5), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ruleId = Number(id);
+    const force = req.query.force === "true" || req.body?.force === true;
+    const usage = await restockRuleController.getRestockRuleUsage(ruleId);
+    if (usage.length && !force) {
+      return res.status(409).json({ error: "規則仍被使用，請先確認", usage });
+    }
+    if (usage.length && force) {
+      for (const item of usage) {
+        await restockRuleController.deleteRestockRuleAssignment(ruleId, item.bom_id);
+      }
+    }
+    await restockRuleController.deleteRestockRule(ruleId);
+    res.status(200).json({ message: "OK" });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:delete");
+    res.status(500).json({ error: "刪除規則失敗" });
+  }
+});
+
+router.get("/materials/:bom_id/rules", accessChecker(1), async (req, res) => {
+  try {
+    const { bom_id } = req.params;
+    const assignments = await restockRuleController.getRestockRuleAssignmentsByBom(
+      Number(bom_id)
+    );
+    res.status(200).json({ assignments });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:assignments:get");
+    res.status(500).json({ error: "取得原料規則設定失敗" });
+  }
+});
+
+router.put("/materials/:bom_id/rules/:rule_id", accessChecker(5), async (req, res) => {
+  try {
+    const { bom_id, rule_id } = req.params;
+    await restockRuleController.upsertRestockRuleAssignment(
+      Number(rule_id),
+      Number(bom_id),
+      req.body || {}
+    );
+    res.status(200).json({ message: "OK" });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:assignments:put");
+    res.status(500).json({ error: "更新原料規則設定失敗" });
+  }
+});
+
+router.delete("/materials/:bom_id/rules/:rule_id", accessChecker(5), async (req, res) => {
+  try {
+    const { bom_id, rule_id } = req.params;
+    await restockRuleController.deleteRestockRuleAssignment(
+      Number(rule_id),
+      Number(bom_id)
+    );
+    res.status(200).json({ message: "OK" });
+  } catch (error) {
+    logger.error(error, req, "autoRestock:rules:assignments:delete");
+    res.status(500).json({ error: "刪除原料規則設定失敗" });
+  }
+});
+
 export default router;
+
+
+
+
+
+
+
+

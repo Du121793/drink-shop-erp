@@ -55,6 +55,8 @@ import PermissionsManage from "./pages/PermissionsManage";
 import MenuManagement from "./pages/MenuManagement";
 import Restock from "./pages/Restock";
 import RestockSuggestions from "./pages/RestockSuggestions";
+import RestockRules from "./pages/RestockRules";
+import RestockRuleGuide from "./pages/RestockRuleGuide";
 import PurchaseOrderLog from "./pages/PurchaseOrderLog";
 import SupplierManagement from "./pages/SupplierManagement";
 import SupplierReputationSettings from "./pages/SupplierReputationSettings";
@@ -131,6 +133,12 @@ const menuItems = [
         path: "/inventory/suggestions",
         icon: <LightbulbIcon />,
         minLevel: 1,
+      },
+      {
+        text: "庫存規則",
+        path: "/inventory/restock-rules",
+        icon: <SettingsSuggestIcon />,
+        minLevel: 5,
       },
       {
         text: "採購紀錄",
@@ -684,6 +692,24 @@ function App() {
                 )}
               />
               <Route
+                path="/inventory/restock-rules"
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <RestockRules />
+                  </Box>,
+                  5
+                )}
+              />
+              <Route
+                path="/inventory/restock-rules-guide"
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <RestockRuleGuide />
+                  </Box>,
+                  5
+                )}
+              />
+              <Route
                 path="/inventory/orders"
                 element={guard(
                   <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
@@ -741,3 +767,4 @@ function App() {
 }
 
 export default App;
+

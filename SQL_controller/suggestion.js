@@ -72,4 +72,92 @@ async function getMaterialStats(days = 7) {
   }
 }
 
-export { getMaterialStats };
+async function getConsumptionByBoms(bomIds = [], days = 7) {
+  if (!Array.isArray(bomIds) || bomIds.length === 0) return [];
+  const pool = getPoolRO();
+  const client = await pool.connect();
+  const safeDays = Number.isFinite(Number(days)) ? Number(days) : 7;
+  try {
+    const result = await client.query(
+      `
+      SELECT bom_id, SUM(quantity_consumed) AS consumed_qty
+      FROM inventory_consumption_log
+      WHERE bom_id = ANY($1)
+        AND quantity_consumed > 0
+        AND consumption_time >= NOW() - ($2 || ' days')::interval
+      GROUP BY bom_id
+      `,
+      [bomIds, safeDays]
+    );
+    return result.rows;
+  } catch (error) {
+    error.msg = "取得原料消耗量失敗";
+    logger.error(error, null, "getConsumptionByBoms");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getExpiringSoonByBoms(bomIds = [], days = 7) {
+  if (!Array.isArray(bomIds) || bomIds.length === 0) return [];
+  const pool = getPoolRO();
+  const client = await pool.connect();
+  const safeDays = Number.isFinite(Number(days)) ? Number(days) : 7;
+  try {
+    const result = await client.query(
+      `
+      SELECT bom_id, SUM(remaining_qty) AS expiring_qty
+      FROM inventory
+      WHERE bom_id = ANY($1)
+        AND expiry_time BETWEEN NOW() AND NOW() + ($2 || ' days')::interval
+      GROUP BY bom_id
+      `,
+      [bomIds, safeDays]
+    );
+    return result.rows;
+  } catch (error) {
+    error.msg = "取得即將過期量失敗";
+    logger.error(error, null, "getExpiringSoonByBoms");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getMonthlyConsumptionByBoms(bomIds = [], months = 12) {
+  if (!Array.isArray(bomIds) || bomIds.length === 0) return [];
+  const pool = getPoolRO();
+  const client = await pool.connect();
+  const safeMonths = Number.isFinite(Number(months)) ? Number(months) : 12;
+  try {
+    const result = await client.query(
+      `
+      SELECT
+        bom_id,
+        EXTRACT(MONTH FROM consumption_time)::int AS month,
+        SUM(quantity_consumed) AS consumed_qty
+      FROM inventory_consumption_log
+      WHERE bom_id = ANY($1)
+        AND quantity_consumed > 0
+        AND consumption_time >= NOW() - ($2 || ' months')::interval
+      GROUP BY bom_id, EXTRACT(MONTH FROM consumption_time)
+      `,
+      [bomIds, safeMonths]
+    );
+    return result.rows;
+  } catch (error) {
+    error.msg = "取得月份消耗量失敗";
+    logger.error(error, null, "getMonthlyConsumptionByBoms");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export {
+  getMaterialStats,
+  getConsumptionByBoms,
+  getExpiringSoonByBoms,
+  getMonthlyConsumptionByBoms,
+};

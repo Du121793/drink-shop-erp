@@ -1,7 +1,7 @@
 ﻿import * as menuController from "../../SQL_controller/menu.js";
 import * as inventoryController from "../../SQL_controller/inventory.js";
 import * as suggestionController from "../../SQL_controller/suggestion.js";
-import { calculateRestockSuggestions } from "../../methods/suggestion_calculator.js";
+import { calculateRestockSuggestionsByRules } from "../../methods/restock_rules/engine.js";
 import * as JWTIssue from "../../methods/JWT_issue.js";
 import * as permissionController from "../../SQL_controller/permission.js";
 
@@ -394,11 +394,7 @@ export async function handleInventoryReport() {
 
 export async function handleRestockList() {
   const materialStats = await suggestionController.getMaterialStats();
-  const allSuggestions = calculateRestockSuggestions(materialStats, {
-    consumptionThresholdPercent: 0.15,
-    criticalStockPercent: 0.1,
-    safetyStockPercent: 0.25,
-  });
+  const allSuggestions = await calculateRestockSuggestionsByRules(materialStats);
 
   const toRestock = allSuggestions.filter((s) => s.suggestion > 0);
 
