@@ -6,6 +6,7 @@ import { accessChecker } from "../middleware/accessChecker.js";
 const router = express.Router();
 
 // 廠商 CRUD
+// 取得廠商清單
 router.get("/suppliers", accessChecker(1), async (req, res) => {
   try {
     const suppliers = await supplierController.getSuppliers();
@@ -16,6 +17,7 @@ router.get("/suppliers", accessChecker(1), async (req, res) => {
   }
 });
 
+// 新增廠商
 router.post("/suppliers", accessChecker(3), async (req, res) => {
   try {
     const { supplier_name, email, phone } = req.body;
@@ -34,6 +36,7 @@ router.post("/suppliers", accessChecker(3), async (req, res) => {
   }
 });
 
+// 更新廠商
 router.patch("/suppliers/:id", accessChecker(3), async (req, res) => {
   try {
     const { id } = req.params;
@@ -50,6 +53,7 @@ router.patch("/suppliers/:id", accessChecker(3), async (req, res) => {
   }
 });
 
+// 刪除廠商
 router.delete("/suppliers/:id", accessChecker(3), async (req, res) => {
   try {
     const { id } = req.params;
@@ -62,6 +66,7 @@ router.delete("/suppliers/:id", accessChecker(3), async (req, res) => {
 });
 
 // 原料-廠商關聯
+// 查詢原料-廠商關聯
 router.get("/suppliers/materials", accessChecker(1), async (req, res) => {
   try {
     const { bom_id } = req.query;
@@ -73,6 +78,7 @@ router.get("/suppliers/materials", accessChecker(1), async (req, res) => {
   }
 });
 
+// 新增或更新原料-廠商關聯
 router.post("/suppliers/materials", accessChecker(3), async (req, res) => {
   try {
     const { supplier_id, bom_id, is_default = false } = req.body;
@@ -91,6 +97,7 @@ router.post("/suppliers/materials", accessChecker(3), async (req, res) => {
   }
 });
 
+// 設定原料預設廠商
 router.patch(
   "/suppliers/materials/default",
   accessChecker(3),
@@ -109,6 +116,7 @@ router.patch(
   }
 );
 
+// 刪除原料-廠商關聯
 router.delete("/suppliers/materials", accessChecker(3), async (req, res) => {
   try {
     const { supplier_id, bom_id } = req.body;
@@ -124,6 +132,7 @@ router.delete("/suppliers/materials", accessChecker(3), async (req, res) => {
 });
 
 // 叫貨紀錄
+// 取得叫貨紀錄批次
 router.get("/purchase-orders", accessChecker(1), async (req, res) => {
   try {
     const groups = await supplierController.getPurchaseOrderGroups();
@@ -134,6 +143,7 @@ router.get("/purchase-orders", accessChecker(1), async (req, res) => {
   }
 });
 
+// 建立叫貨紀錄
 router.post("/purchase-orders", accessChecker(1), async (req, res) => {
   try {
     const orders = Array.isArray(req.body?.orders) ? req.body.orders : [];
@@ -143,20 +153,37 @@ router.post("/purchase-orders", accessChecker(1), async (req, res) => {
     const inserted = await supplierController.createPurchaseOrderLogs(orders);
     res.status(201).json({ inserted });
   } catch (error) {
+    if (error.isBlocked) {
+      return res.status(403).json({ error: error.message, block_until: error.blockUntil });
+    }
     logger.error(error, req, "createPurchaseOrders");
     res.status(500).json({ error: "新增叫貨紀錄失敗" });
   }
 });
 
+// 更新叫貨狀態並寫入事件
 router.patch("/purchase-orders/:id/status", accessChecker(1), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const {
+      status,
+      event_type_id,
+      event_type_ids,
+      event_code,
+      event_codes,
+      event_note,
+    } = req.body;
     const parsedStatus = Number(status);
     if (![1, 3].includes(parsedStatus)) {
       return res.status(400).json({ error: "狀態僅能更新為 1 或 3" });
     }
-    await supplierController.updatePurchaseOrderStatus(id, parsedStatus);
+    await supplierController.updatePurchaseOrderStatus(id, parsedStatus, {
+      event_type_id,
+      event_type_ids,
+      event_code,
+      event_codes,
+      event_note,
+    });
     res.status(200).json({ message: "狀態已更新" });
   } catch (error) {
     if (error.isBadRequest) {

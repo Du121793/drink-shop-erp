@@ -1,23 +1,23 @@
-﻿-- sample suppliers n=10
+﻿-- 範例廠商 n=12
 INSERT INTO supplier (supplier_name, email, phone)
 SELECT
   'supplier' || gs,
   CASE
-    WHEN gs % 5 = 0 THEN NULL                  -- some suppliers without email
-    WHEN gs % 3 = 0 THEN NULL                  -- some suppliers without phone
+    WHEN gs % 5 = 0 THEN NULL                  -- 部分廠商不提供 Email
+    WHEN gs % 3 = 0 THEN NULL                  -- 部分廠商不提供電話
     ELSE 'vendor' || gs || '@example.com'
   END AS email,
   CASE
-    WHEN gs % 5 = 0 THEN NULL                  -- align with missing email for variety
-    WHEN gs % 4 = 0 THEN NULL                  -- some suppliers without email
+    WHEN gs % 5 = 0 THEN NULL                  -- 配合缺少 Email 的樣本
+    WHEN gs % 4 = 0 THEN NULL                  -- 部分廠商不提供 Email
     ELSE '09' || lpad((gs * 1234567 % 100000000)::text, 8, '0')
   END AS phone
-FROM generate_series(1, 10) AS gs
+FROM generate_series(1, 12) AS gs
 ON CONFLICT (supplier_name) DO UPDATE
 SET email = EXCLUDED.email,
     phone = EXCLUDED.phone;
 
--- n=10 suppliers mapped to first 10 bom rows (looped assignment)
+-- 將 12 間廠商對應前 12 筆原料（循環分配）
 WITH
 s AS (
   SELECT supplier_id,
@@ -30,10 +30,10 @@ b AS (
          row_number() OVER (ORDER BY bom_id) AS rn
   FROM bom
   ORDER BY bom_id
-  LIMIT 10
+  LIMIT 12
 ),
 pairs AS (
-  -- default supplier
+  -- 預設廠商
   SELECT
     b.bom_id,
     s1.supplier_id,
@@ -44,7 +44,7 @@ pairs AS (
 
   UNION ALL
 
-  -- second supplier (non-default)
+  -- 第二供應商（非預設）
   SELECT
     b.bom_id,
     s2.supplier_id,

@@ -29,3 +29,10 @@ ON purchase_order_log (bom_id);
 
 CREATE INDEX IF NOT EXISTS idx_purchase_order_log_order_time
 ON purchase_order_log (order_time);
+
+
+ALTER TABLE purchase_order_log
+ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMPTZ;
+
+ALTER TABLE purchase_order_log
+ADD COLUMN IF NOT EXISTS arrived_at TIMESTAMPTZ;

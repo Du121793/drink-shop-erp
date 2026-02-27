@@ -18,3 +18,10 @@ INSERT INTO inventory (bom_id, stock_in_time, stock_in_qty, remaining_qty, expir
 (15, NOW(), 500, 500, NOW() + INTERVAL '180 days'),
 (16, NOW(), 500, 500, NOW() + INTERVAL '180 days'),
 (17, NOW(), 500, 500, NOW() + INTERVAL '180 days');
+
+-- 供應商信譽測試用
+-- 製造低庫存與近效期，便於看出補貨建議
+UPDATE inventory
+SET remaining_qty = CASE WHEN bom_id IN (1, 2) THEN 20 ELSE remaining_qty END,
+    expiry_time = CASE WHEN bom_id IN (1, 2) THEN NOW() + INTERVAL '3 days' ELSE expiry_time END
+WHERE bom_id IN (1, 2);

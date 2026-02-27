@@ -12,6 +12,7 @@ import menu from "./routes/menu.js";
 import inventory from "./routes/inventory.js";
 import order from "./routes/order.js";
 import autoRestock from "./routes/autoRestock.js";
+import supplierReputation from "./routes/supplierReputation.js";
 import supplier from "./routes/supplier.js";
 import permissions from "./routes/permissions.js";
 import grafanaRouter from "./routes/grafana/index.js";
@@ -39,15 +40,18 @@ app.use("/menu", menu);
 app.use("/inventory", inventory);
 app.use("/order", order);
 app.use("/autoRestock", autoRestock);
+app.use("/", supplierReputation);
 app.use("/", supplier);
 app.use("/", permissions);
 
+// 健康檢查端點
 app.get("/", (req, res) => {
   res.send("伺服器運行中");
 });
 
 const SERVER_PORT = process.env.SERVER_PORT || 3000;
 
+// 啟動伺服器並初始化資源
 app.listen(SERVER_PORT, () => {
   try {
     const __filename = fileURLToPath(import.meta.url);

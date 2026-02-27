@@ -202,4 +202,13 @@ SET remaining_qty = c.new_remaining
 FROM calc c
 WHERE i.inventory_id = c.inventory_id;
 
+-- 供應商信譽測試用叫貨紀錄
+INSERT INTO purchase_order_log
+  (supplier_id, bom_id, order_qty, order_time, expected_delivery_at, arrived_at, order_status)
+VALUES
+  (1, 1, 120, NOW() - INTERVAL '5 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days', 1),
+  (2, 2, 80, NOW() - INTERVAL '4 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days', 1),
+  (3, 3, 150, NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 days', NULL, 0),
+  (4, 4, 90, NOW() - INTERVAL '6 days', NOW() - INTERVAL '4 days', NULL, 3);
+
 COMMIT;

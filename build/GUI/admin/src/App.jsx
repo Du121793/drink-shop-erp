@@ -43,6 +43,7 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import HistoryEduIcon from "@mui/icons-material/HistoryEdu";
 import BusinessIcon from "@mui/icons-material/Business";
+import ShieldIcon from "@mui/icons-material/Shield";
 import MenuIcon from "@mui/icons-material/Menu";
 import { useLiffInit } from "./hooks/useLiff";
 import api, { isTokenExpired } from "./api/axios";
@@ -56,6 +57,7 @@ import Restock from "./pages/Restock";
 import RestockSuggestions from "./pages/RestockSuggestions";
 import PurchaseOrderLog from "./pages/PurchaseOrderLog";
 import SupplierManagement from "./pages/SupplierManagement";
+import SupplierReputationSettings from "./pages/SupplierReputationSettings";
 import MenuItemManagement from "./pages/MenuItemManagement";
 import CustomOptionManagement from "./pages/CustomOptionManagement";
 import BomManagement from "./pages/BomManagement";
@@ -142,6 +144,12 @@ const menuItems = [
         icon: <BusinessIcon />,
         minLevel: 3,
       },
+      {
+        text: "供應商信譽設定",
+        path: "/inventory/supplier-reputation",
+        icon: <ShieldIcon />,
+        minLevel: 3,
+      },
     ],
   },
   {
@@ -166,6 +174,7 @@ const menuItems = [
   },
 ];
 
+// 權限保護：未達門檻導向無權限頁
 function ProtectedRoute({
   minLevel = 0,
   permissionLevel,
@@ -203,6 +212,7 @@ function ProtectedRoute({
   return children;
 }
 
+// 無權限頁重新導向（依權限回到可見頁）
 function PermissionRedirector({ permissionLevel, permissionLoading }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -221,6 +231,7 @@ function PermissionRedirector({ permissionLevel, permissionLoading }) {
   return null;
 }
 
+// 管理後台入口
 function App() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -241,6 +252,7 @@ function App() {
 
   // 交換 LIFF ID Token -> 後端 JWT，並統一設置到 axios header
   React.useEffect(() => {
+    // 交換 LIFF Token 並設定 API 夾帶
     const exchangeToken = async () => {
       if (!idToken || isTokenExpired(idToken)) {
         setBackendToken(null);
@@ -302,6 +314,7 @@ function App() {
 
   // 讀取個人資料與權限
   React.useEffect(() => {
+    // 取得使用者權限與姓名
     const fetchMe = async () => {
       if (!idToken) {
         setPermissionLevel(0);
@@ -333,7 +346,7 @@ function App() {
               employee_name: profile.displayName,
             });
           } catch {
-            // ignore name sync failure
+            // 忽略名稱同步失敗
           }
         }
         const rolesFromProfile = Array.isArray(res.data?.employee?.roles)
@@ -359,7 +372,7 @@ function App() {
               );
             }
           } catch {
-            // ignore, fallback to 0
+            // 忽略錯誤，回退為 0
           }
         }
         setPermissionLevel(level);
@@ -373,6 +386,7 @@ function App() {
     fetchMe();
   }, [profile, backendToken, idToken, tokenAttempted]);
 
+  // 切換側邊選單展開狀態
   const handleToggle = (key) => {
     if (key === "menu") {
       setOpenMenu((prev) => !prev);
@@ -381,12 +395,14 @@ function App() {
     }
   };
 
+  // 行動版點選後收起側邊選單
   const handleNavClick = () => {
     if (isMobile) {
       setMobileOpen(false);
     }
   };
 
+  // 子選單展開渲染
   const renderCollapse = (item) => {
     const isMenuSection = item.key === "menu";
     const open = isMenuSection ? openMenu : openInventoryMenu;
@@ -418,6 +434,7 @@ function App() {
     );
   };
 
+  // 依權限過濾可見的選單項目
   const visibleMenuItems = React.useMemo(() => {
     return menuItems
       .map((item) => {
@@ -436,6 +453,7 @@ function App() {
       .filter(Boolean);
   }, [permissionLevel]);
 
+  // 權限守門：包一層保護元件
   const guard = (element, minLevel = 0) => (
     <ProtectedRoute
       minLevel={minLevel}
@@ -679,6 +697,15 @@ function App() {
                 element={guard(
                   <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
                     <SupplierManagement />
+                  </Box>,
+                  3
+                )}
+              />
+              <Route
+                path="/inventory/supplier-reputation"
+                element={guard(
+                  <Box sx={{ flexGrow: 1, px: 3, pb: 3, pt: 2 }}>
+                    <SupplierReputationSettings />
                   </Box>,
                   3
                 )}

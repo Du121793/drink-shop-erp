@@ -1,5 +1,6 @@
 import { getPoolRO, getPoolRW } from "./db_connect.js";
 import * as logger from "../methods/logger.js";
+import { assertSupplierNotBlocked, getReputationRule, createSupplierEvent, recalculateSupplierScore } from "./supplierReputation.js";
 
 // 取得廠商清單
 async function getSuppliers() {
@@ -235,16 +236,26 @@ async function createPurchaseOrderLogs(records = []) {
   const client = await pool.connect();
   const inserted = [];
   try {
+    const rule = await getReputationRule();
+    const leadTimeDays = Number(rule.default_lead_time_days || 0);
     await client.query("BEGIN");
     for (const rec of records) {
       const { supplier_id, bom_id, order_qty, order_time } = rec;
+      await assertSupplierNotBlocked(supplier_id);
+      const orderTimeValue = order_time ? new Date(order_time) : new Date();
+      const expectedDelivery =
+        leadTimeDays > 0
+          ? new Date(
+              orderTimeValue.getTime() + leadTimeDays * 24 * 60 * 60 * 1000
+            )
+          : null;
       const result = await client.query(
         `
-        INSERT INTO purchase_order_log (supplier_id, bom_id, order_qty, order_time)
-        VALUES ($1, $2, $3, COALESCE($4, NOW()))
-        RETURNING order_id, order_time
+        INSERT INTO purchase_order_log (supplier_id, bom_id, order_qty, order_time, expected_delivery_at)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING order_id, order_time, expected_delivery_at
         `,
-        [supplier_id, bom_id, order_qty, order_time ? new Date(order_time) : null]
+        [supplier_id, bom_id, order_qty, orderTimeValue, expectedDelivery]
       );
       inserted.push(result.rows[0]);
     }
@@ -252,7 +263,9 @@ async function createPurchaseOrderLogs(records = []) {
     return inserted;
   } catch (error) {
     await client.query("ROLLBACK");
-    error.msg = "新增叫貨紀錄失敗";
+    if (!error.msg) {
+      error.msg = "建立叫貨紀錄失敗";
+    }
     logger.error(error, null, "createPurchaseOrderLogs");
     throw error;
   } finally {
@@ -306,14 +319,15 @@ async function getPurchaseOrderGroups() {
 }
 
 // 更新採購紀錄狀態（僅允許從狀態 0 更新為 1 或 3）
-async function updatePurchaseOrderStatus(orderId, status) {
+async function updatePurchaseOrderStatus(orderId, status, options = {}) {
   if (!orderId) {
     const err = new Error("order_id is required");
     err.isBadRequest = true;
     throw err;
   }
-  if (![1, 3].includes(Number(status))) {
-    const err = new Error("狀態僅能更新為 1 或 3");
+  const parsedStatus = Number(status);
+  if (![1, 3].includes(parsedStatus)) {
+    const err = new Error("狀態僅支援 1 或 3");
     err.isBadRequest = true;
     throw err;
   }
@@ -321,14 +335,16 @@ async function updatePurchaseOrderStatus(orderId, status) {
   const pool = getPoolRW();
   const client = await pool.connect();
   try {
+    await client.query("BEGIN");
     const result = await client.query(
       `
       UPDATE purchase_order_log
-      SET order_status = $1
+      SET order_status = $1::smallint,
+          arrived_at = CASE WHEN $1::smallint = 1 THEN NOW() ELSE arrived_at END
       WHERE order_id = $2 AND order_status = 0
-      RETURNING order_id
+      RETURNING order_id, supplier_id, expected_delivery_at, arrived_at
       `,
-      [status, orderId]
+      [parsedStatus, orderId]
     );
 
     if (result.rowCount === 0) {
@@ -341,12 +357,103 @@ async function updatePurchaseOrderStatus(orderId, status) {
         err.isNotFound = true;
         throw err;
       }
-      const err = new Error("僅狀態 0 可更新狀態");
+      const err = new Error("非 0 狀態不可更新");
       err.isBadRequest = true;
       throw err;
     }
+
+    const orderRow = result.rows[0];
+    const eventsToCreate = [];
+
+    if (
+      parsedStatus === 1 &&
+      orderRow.expected_delivery_at &&
+      new Date(orderRow.arrived_at) > new Date(orderRow.expected_delivery_at)
+    ) {
+      eventsToCreate.push({
+        event_code: "late_delivery",
+        note: null,
+      });
+    }
+
+    const hasEventTypeIds = Object.prototype.hasOwnProperty.call(
+      options,
+      "event_type_ids"
+    );
+    const hasEventCodes = Object.prototype.hasOwnProperty.call(
+      options,
+      "event_codes"
+    );
+    const hasExplicitEvents =
+      hasEventTypeIds ||
+      hasEventCodes ||
+      options.event_type_id ||
+      options.event_code;
+    const eventTypeIds = Array.isArray(options.event_type_ids)
+      ? options.event_type_ids
+      : options.event_type_id
+      ? [options.event_type_id]
+      : [];
+    const eventCodes = Array.isArray(options.event_codes)
+      ? options.event_codes
+      : options.event_code
+      ? [options.event_code]
+      : [];
+
+    eventTypeIds
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id))
+      .forEach((id) => {
+        eventsToCreate.push({
+          event_type_id: id,
+          note: options.event_note ?? null,
+        });
+      });
+
+    eventCodes
+      .map((code) => (code ? String(code) : ""))
+      .filter(Boolean)
+      .forEach((code) => {
+        eventsToCreate.push({
+          event_code: code,
+          note: options.event_note ?? null,
+        });
+      });
+
+    if (parsedStatus === 3 && !hasExplicitEvents) {
+      eventsToCreate.push({
+        event_code: "order_failed",
+        note: options.event_note ?? null,
+      });
+    }
+
+    for (const payload of eventsToCreate) {
+      await createSupplierEvent(
+        {
+          supplier_id: orderRow.supplier_id,
+          order_id: orderId,
+          event_type_id: payload.event_type_id,
+          event_code: payload.event_code,
+          note: payload.note,
+        },
+        client
+      );
+    }
+
+    await client.query("COMMIT");
+
+    if (eventsToCreate.length) {
+      try {
+        await recalculateSupplierScore(orderRow.supplier_id);
+      } catch (error) {
+        logger.error(error, null, "updatePurchaseOrderStatus:recalculate");
+      }
+    }
   } catch (error) {
-    if (!error.msg) error.msg = `更新叫貨紀錄狀態失敗 (order_id: ${orderId})`;
+    await client.query("ROLLBACK");
+    if (!error.msg) {
+      error.msg = `更新叫貨紀錄狀態失敗 (order_id: ${orderId})`;
+    }
     logger.error(error, null, "updatePurchaseOrderStatus");
     throw error;
   } finally {
