@@ -131,7 +131,6 @@ LINE 回呼網址、LIFF 網址與反向代理公開網址必須互相對應。`
 | [methods/restock_rules](methods/restock_rules) | 補貨規則的目標、動作與計算 |
 | [build/SQL](build/SQL) | Schema、重建 SQL 與範例資料 |
 | [corn/cleanup.js](corn/cleanup.js) | 清理排程；資料夾實際名稱是 `corn` |
-| [AGENT.md](AGENT.md) | 規則、權限與開發約定 |
 
 主要掛載入口為 `/line`、`/liff`、`/menu`、`/inventory`、`/order`、`/autoRestock`、`/grafana`，供應商與權限路由則掛在根路徑。完整方法與請求參數以各 [routes](routes) 模組為準。
 
