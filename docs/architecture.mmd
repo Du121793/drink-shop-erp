@@ -1,0 +1,16 @@
+%% 根據此版本程式的責任與相依繪製，不代表已完成外部服務或硬體驗收
+flowchart TB
+  subgraph users[使用者介面]
+    MENU["顧客菜單<br/>React / Vite"]
+    ADMIN["管理後台<br/>React / Vite / LIFF"]
+  end
+  LINE["LINE 平台<br/>Login / Webhook"] --> API["Express API<br/>身分與路由"]
+  MENU --> API
+  ADMIN --> API
+  GRAFANA["Grafana<br/>原料告警"] --> API
+  API --> ORDER["點餐與庫存<br/>商品 / 配方 / 扣料"]
+  API --> RESTOCK["補貨與供應商<br/>目標 / 觸發 / 採購"]
+  API --> PERM["權限服務<br/>角色 / 繼承 / 覆寫"]
+  ORDER --> DB[("PostgreSQL<br/>交易 / 庫存 / 規則 / 權限")]
+  RESTOCK --> DB
+  PERM --> DB
