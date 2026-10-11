@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React from "react";
 import {
   Box,
   Typography,
@@ -14,181 +14,267 @@ import {
   TableCell,
   TableBody,
   TableContainer,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
-import { getRoles, getEmployees, updateEmployee, registerEmployee } from "../api/permissions";
+
+import PermissionMatrix from "../components/permissions/PermissionMatrix";
+
+import usePermissionsManage from "./permissionsManage/usePermissionsManage";
 
 function PermissionsManage() {
-  const [roles, setRoles] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const [registerToken, setRegisterToken] = useState("");
-  const [registerName, setRegisterName] = useState("");
-  const [registerRoles, setRegisterRoles] = useState([]);
-
-  const loadAll = async () => {
-    setError("");
-    try {
-      const [rRes, eRes] = await Promise.all([getRoles(), getEmployees()]);
-      setRoles(rRes.data?.roles || []);
-      setEmployees(eRes.data?.employees || []);
-    } catch (err) {
-      console.error("載入角色/員工失敗", err);
-      setError("載入角色或員工資料失敗，請稍後再試。");
+  const { roles, permissions, employees, setEmployees, selectedRoleId, setSelectedRoleId, roleDetail, roleForm, setRoleForm, roleInheritIds, setRoleInheritIds, rolePermissionMap, setRolePermissionMap, message, error, saving, registerToken, setRegisterToken, registerName, setRegisterName, registerRoles, setRegisterRoles, overrideDialogOpen, overrideEmployee, setOverrideEmployee, createDialogOpen, setCreateDialogOpen, createForm, setCreateForm, assignableRoles, handleRoleSave, handleRoleDelete, handleCreateRole, handleUpdateEmployee, handleRegisterEmployee, roleMap, openOverrideDialog, closeOverrideDialog, handleOverrideSave, overrideMap, isSystemRole } = usePermissionsManage();
+const renderRoleChips = (roleIds = []) => {
+    if (!roleIds.length) {
+      return <Chip label="未指派" size="small" />;
     }
+    return (
+      <Stack direction="row" spacing={1} flexWrap="wrap">
+        {roleIds.map((id) => {
+          const role = roleMap.get(String(id));
+          return <Chip key={id} label={role ? role.role_name : id} size="small" />;
+        })}
+      </Stack>
+    );
   };
 
-  useEffect(() => {
-    loadAll();
-  }, []);
-
-  const handleUpdateEmployee = async (emp) => {
-    setMessage("");
-    setError("");
-    setSaving(true);
-    try {
-      await updateEmployee(emp.line_id, {
-        employee_name: emp.employee_name,
-        role_ids: emp.roles,
-      });
-      setMessage(`已更新 ${emp.line_id}`);
-      loadAll();
-    } catch (err) {
-      console.error("更新員工失敗", err);
-      setError("更新員工失敗，請稍後再試。");
-    } finally {
-      setSaving(false);
+const renderInheritChips = (roleIds = []) => {
+    if (!roleIds.length) {
+      return <Chip label="本身" size="small" />;
     }
+    return (
+      <Stack direction="row" spacing={1} flexWrap="wrap">
+        {roleIds.map((id) => {
+          const role = roleMap.get(String(id));
+          return <Chip key={id} label={role ? role.role_name : id} size="small" />;
+        })}
+      </Stack>
+    );
   };
-
-  const handleRegisterEmployee = async () => {
-    if (!registerToken) {
-      setError("請輸入註冊代碼");
-      return;
-    }
-    setMessage("");
-    setError("");
-    setSaving(true);
-    try {
-      await registerEmployee({
-        token: registerToken,
-        role_ids: registerRoles,
-        employee_name: registerName || undefined,
-      });
-      setMessage("已註冊並設定身分組");
-      setRegisterToken("");
-      setRegisterName("");
-      setRegisterRoles([]);
-      loadAll();
-    } catch (err) {
-      console.error("註冊員工失敗", err);
-      setError("註冊員工失敗，請稍後再試。");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const renderRoles = (roleIds = []) => (
-    <Stack direction="row" spacing={1} flexWrap="wrap">
-      {roleIds.map((id) => {
-        const r = roles.find((x) => x.role_id === id);
-        return <Chip key={id} label={r ? r.role_name : id} size="small" />;
-      })}
-    </Stack>
-  );
-
-  return (
+return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Typography variant="h4">管理員工</Typography>
+      <Typography variant="h4">權限管理</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {message && <Typography color="success.main">{message}</Typography>}
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
+          gap: 2,
+        }}
+      >
         <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            註冊新員工（使用註冊代碼）
-          </Typography>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <TextField label="註冊代碼" value={registerToken} onChange={(e) => setRegisterToken(e.target.value)} />
-            <TextField label="員工姓名（可選）" value={registerName} onChange={(e) => setRegisterName(e.target.value)} />
-            <TextField
-              select
-              label="指定身分組"
-              value={registerRoles}
-              onChange={(e) => {
-                const val = e.target.value;
-                const next = typeof val === "string" ? val.split(",").map(Number) : val;
-                setRegisterRoles(next);
-              }}
-              SelectProps={{
-                multiple: true,
-                renderValue: (selected) => renderRoles(selected),
-              }}
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="h6">角色設定</Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setCreateDialogOpen(true)}
             >
-              {roles.map((r) => (
-                <MenuItem key={r.role_id} value={r.role_id}>
-                  {r.role_name}（等級 {r.permission_level}）
-                </MenuItem>
-              ))}
-            </TextField>
-            <Button variant="contained" onClick={handleRegisterEmployee} disabled={saving}>
-              註冊並設定身分組
+              新增角色
             </Button>
-          </Box>
+          </Stack>
+
+          <TextField
+            select
+            fullWidth
+            label="選擇角色"
+            value={selectedRoleId}
+            onChange={(e) => setSelectedRoleId(String(e.target.value))}
+            sx={{ mb: 2 }}
+          >
+            {roles.map((role) => (
+              <MenuItem key={role.role_id} value={role.role_id}>
+                {role.role_name}
+                {role.is_assignable ? "" : "（模板）"}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          {roleDetail?.role ? (
+            <Stack spacing={2}>
+              <TextField
+                label="角色名稱"
+                value={roleForm.role_name}
+                onChange={(e) =>
+                  setRoleForm((prev) => ({
+                    ...prev,
+                    role_name: e.target.value,
+                  }))
+                }
+                disabled={isSystemRole}
+              />
+              <TextField
+                label="說明"
+                value={roleForm.description}
+                onChange={(e) =>
+                  setRoleForm((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
+                disabled={isSystemRole}
+              />
+              <Stack direction="row" spacing={2}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={roleForm.is_assignable}
+                      onChange={(e) =>
+                        setRoleForm((prev) => ({
+                          ...prev,
+                          is_assignable: e.target.checked,
+                        }))
+                      }
+                      disabled={isSystemRole}
+                    />
+                  }
+                  label="可指派"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={roleForm.is_active}
+                      onChange={(e) =>
+                        setRoleForm((prev) => ({
+                          ...prev,
+                          is_active: e.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="啟用"
+                />
+              </Stack>
+              <TextField
+                select
+                fullWidth
+                label="繼承角色（模板/其他角色）"
+                value={roleInheritIds}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const next = typeof val === "string" ? val.split(",") : val;
+                  setRoleInheritIds(next.map((v) => String(v)));
+                }}
+                SelectProps={{
+                  multiple: true,
+                  renderValue: (selected) => renderInheritChips(selected),
+                }}
+              >
+                {roles
+                  .filter((r) => r.role_id !== roleDetail.role.role_id)
+                  .map((r) => (
+                    <MenuItem key={r.role_id} value={r.role_id}>
+                      {r.role_name}
+                      {r.is_assignable ? "" : "（模板）"}
+                    </MenuItem>
+                  ))}
+              </TextField>
+
+              <PermissionMatrix
+                permissions={permissions}
+                value={rolePermissionMap}
+                onChange={setRolePermissionMap}
+              />
+
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" onClick={handleRoleSave} disabled={saving}>
+                  儲存角色
+                </Button>
+                {!isSystemRole && (
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    onClick={handleRoleDelete}
+                    disabled={saving}
+                  >
+                    刪除角色
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+          ) : (
+            <Typography>請先選擇角色。</Typography>
+          )}
         </Paper>
 
         <Paper sx={{ p: 2 }}>
           <Typography variant="h6" gutterBottom>
-            現有身分組
+            註冊新員工
           </Typography>
-          {roles.length === 0 ? (
-            <Typography>尚無資料</Typography>
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>角色名稱</TableCell>
-                    <TableCell>權限等級</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {roles.map((r) => (
-                    <TableRow key={r.role_id}>
-                      <TableCell>{r.role_name}</TableCell>
-                      <TableCell>{r.permission_level}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <Stack spacing={2}>
+            <TextField
+              label="註冊 token"
+              value={registerToken}
+              onChange={(e) => setRegisterToken(e.target.value)}
+            />
+            <TextField
+              label="員工姓名（選填）"
+              value={registerName}
+              onChange={(e) => setRegisterName(e.target.value)}
+            />
+            <TextField
+              select
+              label="指派角色"
+              value={registerRoles}
+              onChange={(e) => {
+                const val = e.target.value;
+                const next =
+                  typeof val === "string" ? val.split(",") : val;
+                setRegisterRoles(next.map((v) => String(v)));
+              }}
+              SelectProps={{
+                multiple: true,
+                renderValue: (selected) => renderRoleChips(selected),
+              }}
+            >
+              {assignableRoles.map((r) => (
+                <MenuItem key={r.role_id} value={r.role_id}>
+                  {r.role_name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button variant="contained" onClick={handleRegisterEmployee} disabled={saving}>
+              完成註冊
+            </Button>
+          </Stack>
         </Paper>
       </Box>
 
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" gutterBottom>
-          員工與身分組
+          員工權限設定
         </Typography>
         {employees.length === 0 ? (
-          <Typography>尚無員工</Typography>
+          <Typography>尚無員工資料</Typography>
         ) : (
           <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>line_id</TableCell>
-                  <TableCell>員工名稱</TableCell>
-                  <TableCell>身分組</TableCell>
-                  <TableCell align="center">動作</TableCell>
+                  <TableCell>Line ID</TableCell>
+                  <TableCell>員工姓名</TableCell>
+                  <TableCell>角色</TableCell>
+                  <TableCell align="center">覆寫</TableCell>
+                  <TableCell align="center">更新</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {employees.map((emp, idx) => (
                   <TableRow key={emp.line_id}>
-                    <TableCell sx={{ wordBreak: "break-all" }}>{emp.line_id}</TableCell>
+                    <TableCell sx={{ wordBreak: "break-all" }}>
+                      {emp.line_id}
+                    </TableCell>
                     <TableCell>
                       <TextField
                         fullWidth
@@ -197,7 +283,11 @@ function PermissionsManage() {
                         onChange={(e) => {
                           const val = e.target.value;
                           setEmployees((prev) =>
-                            prev.map((item, i) => (i === idx ? { ...item, employee_name: val } : item))
+                            prev.map((item, i) =>
+                              i === idx
+                                ? { ...item, employee_name: val }
+                                : item
+                            )
                           );
                         }}
                       />
@@ -210,25 +300,44 @@ function PermissionsManage() {
                         value={emp.roles || []}
                         onChange={(e) => {
                           const val = e.target.value;
-                          const nextRoles = typeof val === "string" ? val.split(",").map(Number) : val;
+                          const nextRoles =
+                            typeof val === "string"
+                              ? val.split(",")
+                              : val;
                           setEmployees((prev) =>
-                            prev.map((item, i) => (i === idx ? { ...item, roles: nextRoles } : item))
+                            prev.map((item, i) =>
+                              i === idx ? { ...item, roles: nextRoles } : item
+                            )
                           );
                         }}
                         SelectProps={{
                           multiple: true,
-                          renderValue: (selected) => renderRoles(selected),
+                          renderValue: (selected) => renderRoleChips(selected),
                         }}
                       >
-                        {roles.map((r) => (
+                        {assignableRoles.map((r) => (
                           <MenuItem key={r.role_id} value={r.role_id}>
-                            {r.role_name}（等級 {r.permission_level}）
+                            {r.role_name}
                           </MenuItem>
                         ))}
                       </TextField>
                     </TableCell>
                     <TableCell align="center">
-                      <Button variant="contained" size="small" onClick={() => handleUpdateEmployee(emp)} disabled={saving}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => openOverrideDialog(emp)}
+                      >
+                        覆寫權限
+                      </Button>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleUpdateEmployee(emp)}
+                        disabled={saving}
+                      >
                         儲存
                       </Button>
                     </TableCell>
@@ -239,8 +348,101 @@ function PermissionsManage() {
           </TableContainer>
         )}
       </Paper>
+
+      <Dialog
+        open={overrideDialogOpen}
+        onClose={closeOverrideDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>員工權限覆寫</DialogTitle>
+        <DialogContent>
+          {overrideEmployee ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="subtitle2">
+                {overrideEmployee.employee_name || overrideEmployee.line_id}
+              </Typography>
+              <PermissionMatrix
+                permissions={permissions}
+                value={overrideMap}
+                onChange={(next) => {
+                  const overrides = Object.entries(next)
+                    .filter(([, effect]) => effect === 1 || effect === -1)
+                    .map(([permission_id, effect]) => ({
+                      permission_id,
+                      effect,
+                    }));
+                  setOverrideEmployee((prev) => ({ ...prev, overrides }));
+                }}
+              />
+            </Stack>
+          ) : (
+            <Typography>尚未選擇員工</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeOverrideDialog}>取消</Button>
+          <Button variant="contained" onClick={handleOverrideSave} disabled={saving}>
+            儲存覆寫
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>新增角色</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="角色名稱"
+              value={createForm.role_name}
+              onChange={(e) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  role_name: e.target.value,
+                }))
+              }
+            />
+            <TextField
+              label="說明"
+              value={createForm.description}
+              onChange={(e) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={createForm.is_assignable}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      is_assignable: e.target.checked,
+                    }))
+                  }
+                />
+              }
+              label="可指派"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialogOpen(false)}>取消</Button>
+          <Button variant="contained" onClick={handleCreateRole} disabled={saving}>
+            建立角色
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
+
 
 export default PermissionsManage;

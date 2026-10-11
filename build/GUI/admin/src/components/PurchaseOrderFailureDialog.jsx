@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -31,13 +31,11 @@ const PurchaseOrderFailureDialog = ({
   const [eventTypeIds, setEventTypeIds] = useState([]);
   const [note, setNote] = useState("");
 
-  // 預設選取「叫貨失敗」事件
-  const defaultFailureId = useMemo(
-    () =>
-      eventTypes.find((t) => t.event_code === "order_failed")?.event_type_id ??
-      null,
-    [eventTypes]
-  );
+  // 預設選「叫貨失敗」事件
+  const defaultFailureId = useMemo(() => {
+    const found = eventTypes.find((t) => t.event_code === "order_failed");
+    return found ? String(found.event_type_id) : "";
+  }, [eventTypes]);
 
   useEffect(() => {
     if (open) {
@@ -46,7 +44,6 @@ const PurchaseOrderFailureDialog = ({
     }
   }, [open, defaultFailureId]);
 
-  // 確認送出事件
   const handleConfirm = () => {
     if (typeof onConfirm !== "function") return;
     const cleanIds = eventTypeIds
@@ -58,6 +55,8 @@ const PurchaseOrderFailureDialog = ({
   const supplierLabel = orderInfo?.supplierName || "-";
   const bomLabel = orderInfo?.bomName || "-";
   const qtyLabel = orderInfo?.quantity ?? "-";
+  const selectLabelId = "failure-event-types-label";
+  const selectId = "failure-event-types";
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
@@ -78,16 +77,17 @@ const PurchaseOrderFailureDialog = ({
         </Typography>
         <Stack spacing={2}>
           <FormControl size="small" fullWidth>
-            <InputLabel id="failure-event-types-label">信譽事件</InputLabel>
+            <InputLabel id={selectLabelId}>信譽事件</InputLabel>
             <Select
-              labelId="failure-event-types-label"
+              id={selectId}
+              labelId={selectLabelId}
               multiple
               value={eventTypeIds}
               onChange={(e) => {
                 const value = e.target.value;
                 const next = (typeof value === "string" ? value.split(",") : value)
-                  .map((id) => Number(id))
-                  .filter((id) => Number.isFinite(id));
+                  .map((id) => String(id))
+                  .filter((id) => id);
                 setEventTypeIds(next);
               }}
               input={<OutlinedInput label="信譽事件" />}
@@ -95,7 +95,7 @@ const PurchaseOrderFailureDialog = ({
                 const labels = selected
                   .map((id) => {
                     const match = eventTypes.find(
-                      (t) => t.event_type_id === id
+                      (t) => String(t.event_type_id) === String(id)
                     );
                     return match?.event_name || `#${id}`;
                   })
@@ -106,17 +106,18 @@ const PurchaseOrderFailureDialog = ({
             >
               {!eventTypes.length && (
                 <MenuItem disabled value="">
-                  無可選事件
+                  尚無可用事件
                 </MenuItem>
               )}
-              {eventTypes.map((t) => (
-                <MenuItem key={t.event_type_id} value={t.event_type_id}>
-                  <Checkbox
-                    checked={eventTypeIds.indexOf(t.event_type_id) > -1}
-                  />
-                  <ListItemText primary={t.event_name} />
-                </MenuItem>
-              ))}
+              {eventTypes.map((t) => {
+                const id = String(t.event_type_id);
+                return (
+                  <MenuItem key={id} value={id}>
+                    <Checkbox checked={eventTypeIds.includes(id)} />
+                    <ListItemText primary={t.event_name} />
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
           <TextField

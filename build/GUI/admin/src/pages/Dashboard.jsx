@@ -2,13 +2,17 @@ import React from "react";
 import { Typography, Box, Paper } from "@mui/material";
 
 function Dashboard() {
-  const grafanaIframeSrc = import.meta.env.VITE_GRAFANA_IFRAME_SRC || ""; // å¾ç’°å¢ƒè®Šæ•¸è®€å–
-
+  const grafanaIframeSrc = import.meta.env.VITE_GRAFANA_IFRAME_SRC || "";
   return (
-    <Paper sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-      {" "}
-      {/* ç¢ºä¿ flexGrow: 1 */}
-      {!grafanaIframeSrc ? ( // åˆ¤æ–· grafanaIframeSrc æ˜¯å¦ç‚ºç©ºå­—ä¸²
+    <Paper
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+        height: "100%",
+      }}
+    >
+      {!grafanaIframeSrc ? (
         <Box
           sx={{
             flexGrow: 1,
@@ -21,27 +25,25 @@ function Dashboard() {
           }}
         >
           <Typography variant="body1" color="text.secondary">
-            è«‹åœ¨å°ˆæ¡ˆæ ¹ç›®éŒ„çš„ `.env` æ–‡ä»¶ä¸­è¨­å®š `VITE_GRAFANA_IFRAME_SRC`
-            è®Šæ•¸ï¼Œå¡«å¯«æ‚¨çš„ Grafana å„€è¡¨æ¿ URLã€‚
+            ½Ğ¦b±M®×ªº `.env` ÀÉ®×¤¤³]©w `VITE_GRAFANA_IFRAME_SRC`¡A¶ñ¤J Grafana »öªíªO URL¡C
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            ä¾‹å¦‚:
+            ¨Ò¦p¡G
             `VITE_GRAFANA_IFRAME_SRC="https://your-grafana-instance/d/your-dashboard-uid/your-dashboard-name?orgId=1&kiosk"`
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            ç¢ºä¿ URL åŒ…å« `embed` è·¯å¾‘ä¸”é©ç”¨æ–¼åµŒå…¥ï¼Œé€šå¸¸æœƒåŒ…å« `&kiosk`
-            åƒæ•¸ä»¥éš±è—å°èˆªã€‚
+            ½T«O URL ¥i´O¤J¡A³q±`·|¥[¤W `&kiosk` °Ñ¼Æ¥HÁôÂÃ°¼ÃäÄæ¡C
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ flexGrow: 1, mt: 1 }}>
+        <Box sx={{ flexGrow: 1, minHeight: 0 }}>
           <iframe
             src={grafanaIframeSrc}
             width="100%"
             height="100%"
             frameBorder="0"
             title="Grafana Dashboard"
-            style={{ border: 0 }}
+            style={{ border: 0, display: "block" }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           ></iframe>
         </Box>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import { addStock } from "../api/inventory";
 
-// 補貨彈窗：可帶入預設數量，成功後透過回呼讓父層接續流程
+// 補貨彈窗：可帶入預設欄位，並可選擇信譽事件
 const RestockDialog = ({
   open,
   onClose,
@@ -37,7 +37,6 @@ const RestockDialog = ({
   const [eventTypeIds, setEventTypeIds] = useState([]);
   const [eventNote, setEventNote] = useState("");
 
-  // 轉成 datetime-local 需要的格式
   const formatDateTimeLocal = (date) => {
     const pad = (n) => String(n).padStart(2, "0");
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
@@ -45,7 +44,6 @@ const RestockDialog = ({
     )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
-  // 依保存天數推算預設到期時間
   const calcDefaultExpiry = () => {
     const now = new Date();
     if (shelfLifeDays && !Number.isNaN(Number(shelfLifeDays))) {
@@ -70,26 +68,23 @@ const RestockDialog = ({
     }
   }, [open, defaultQuantity, shelfLifeDays]);
 
-  // 補貨量變更
   const handleQuantityChange = (e) => {
     setQuantity(e.target.value);
     if (error) setError("");
   };
 
-  // 到期時間變更
   const handleExpiryChange = (e) => {
     setExpiry(e.target.value);
     if (error) setError("");
   };
 
-  // 送出補貨並可選擇建立信譽事件
   const handleRestock = async () => {
     if (!quantity || isNaN(quantity) || Number(quantity) <= 0) {
       setError("請輸入有效補貨量");
       return;
     }
     if (!expiry) {
-      setError("請輸入有效到期時間");
+      setError("請輸入有效到期日");
       return;
     }
 
@@ -119,7 +114,6 @@ const RestockDialog = ({
     }
   };
 
-  // 關閉彈窗並重置狀態
   const handleClose = () => {
     setQuantity("");
     setError("");
@@ -127,17 +121,20 @@ const RestockDialog = ({
     onClose();
   };
 
+  const selectLabelId = "restock-event-types-label";
+  const selectId = "restock-event-types";
+
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
       <DialogTitle>
-        補貨:{" "}
+        補貨：{" "}
         <Typography component="span" variant="h6" color="primary">
           {bomName}
         </Typography>
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          請確認補貨資訊
+          請確認補貨數量
         </Typography>
         <TextField
           autoFocus
@@ -153,7 +150,7 @@ const RestockDialog = ({
         />
         <TextField
           margin="dense"
-          label="此批原料過期日期"
+          label="此批原料到期日"
           type="datetime-local"
           fullWidth
           variant="outlined"
@@ -164,19 +161,22 @@ const RestockDialog = ({
           sx={{ mt: 2 }}
         />
         <Divider sx={{ my: 2 }} />
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>若有發生廠商信譽事件，請選擇以下事件（可多選）</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          若有發生廠商信譽事件，請選擇以下事件（可多選）
+        </Typography>
         <Stack spacing={2}>
           <FormControl size="small" fullWidth>
-            <InputLabel id="restock-event-types-label">信譽事件</InputLabel>
+            <InputLabel id={selectLabelId}>信譽事件</InputLabel>
             <Select
-              labelId="restock-event-types-label"
+              id={selectId}
+              labelId={selectLabelId}
               multiple
               value={eventTypeIds}
               onChange={(e) => {
                 const value = e.target.value;
                 const next = (typeof value === "string" ? value.split(",") : value)
-                  .map((id) => Number(id))
-                  .filter((id) => Number.isFinite(id));
+                  .map((id) => String(id))
+                  .filter((id) => id);
                 setEventTypeIds(next);
               }}
               input={<OutlinedInput label="信譽事件" />}
@@ -184,7 +184,7 @@ const RestockDialog = ({
                 const labels = selected
                   .map((id) => {
                     const match = eventTypes.find(
-                      (t) => t.event_type_id === id
+                      (t) => String(t.event_type_id) === String(id)
                     );
                     return match?.event_name || `#${id}`;
                   })
@@ -194,14 +194,19 @@ const RestockDialog = ({
               disabled={loading}
             >
               {!eventTypes.length && (
-                <MenuItem disabled value="">無可選事件</MenuItem>
-              )}
-              {eventTypes.map((t) => (
-                <MenuItem key={t.event_type_id} value={t.event_type_id}>
-                  <Checkbox checked={eventTypeIds.indexOf(t.event_type_id) > -1} />
-                  <ListItemText primary={t.event_name} />
+                <MenuItem disabled value="">
+                  尚無可用事件
                 </MenuItem>
-              ))}
+              )}
+              {eventTypes.map((t) => {
+                const id = String(t.event_type_id);
+                return (
+                  <MenuItem key={id} value={id}>
+                    <Checkbox checked={eventTypeIds.includes(id)} />
+                    <ListItemText primary={t.event_name} />
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
           <TextField

@@ -1,26 +1,41 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, Paper, TextField, Button, Stack, Chip } from "@mui/material";
-import { getMe, updateMe, getRoles } from "../api/permissions";
+﻿import React, { useEffect, useState } from "react";
+import {
+  Box,
+  Typography,
+  Paper,
+  TextField,
+  Button,
+  Stack,
+  Chip,
+  Divider,
+} from "@mui/material";
+import { getMe, updateMe, getPermissions } from "../api/permissions";
 
 function PermissionsProfile() {
   const [me, setMe] = useState(null);
-  const [rolesMap, setRolesMap] = useState({});
+  const [permissions, setPermissions] = useState([]);
+  const [permissionMap, setPermissionMap] = useState({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const sortedPermissions = React.useMemo(
+    () => [...permissions].sort(),
+    [permissions]
+  );
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [meRes, rolesRes] = await Promise.all([getMe(), getRoles()]);
+        const [meRes, permRes] = await Promise.all([getMe(), getPermissions()]);
         setMe(meRes.data?.employee || null);
+        setPermissions(meRes.data?.permissions || []);
         const map = {};
-        (rolesRes.data?.roles || []).forEach((r) => {
-          map[r.role_id] = r.role_name;
+        (permRes.data?.permissions || []).forEach((p) => {
+          map[p.code] = p.name;
         });
-        setRolesMap(map);
-      } catch (err) {
-        setError("載入個人資料失敗，請稍後再試");
+        setPermissionMap(map);
+      } catch {
+        setError("載入個人資訊失敗，請稍後再試。");
       }
     };
     load();
@@ -33,47 +48,74 @@ function PermissionsProfile() {
     setError("");
     try {
       await updateMe({ employee_name: me.employee_name });
-      setMessage("已更新個人資料");
-    } catch (err) {
-      setError("更新個人資料失敗，請稍後再試");
+      setMessage("已更新個人資訊");
+    } catch {
+      setError("更新個人資訊失敗，請稍後再試。");
     } finally {
       setSaving(false);
     }
   };
 
-  const renderRoles = (roleIds = []) => (
+  const renderRoles = (roleList = []) => (
     <Stack direction="row" spacing={1} flexWrap="wrap">
-      {roleIds.map((id) => (
-        <Chip key={id} label={rolesMap[id] || `角色 ${id}`} size="small" />
+      {roleList.map((role) => (
+        <Chip
+          key={role.role_id}
+          label={role.role_name}
+          size="small"
+          color={role.is_assignable ? "primary" : "default"}
+          variant={role.is_assignable ? "filled" : "outlined"}
+        />
       ))}
     </Stack>
   );
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Typography variant="h4">個人資料</Typography>
+      <Typography variant="h4">個人資訊</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {message && <Typography color="success.main">{message}</Typography>}
 
-      <Paper sx={{ p: 2, maxWidth: 520 }}>
+      <Paper sx={{ p: 2, maxWidth: 640 }}>
         {!me ? (
           <Typography>載入中...</Typography>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <TextField label="Line ID" value={me.line_id} InputProps={{ readOnly: true }} />
+            <TextField
+              label="Line ID"
+              value={me.line_id}
+              InputProps={{ readOnly: true }}
+            />
             <TextField
               label="姓名"
               value={me.employee_name || ""}
-              onChange={(e) => setMe((prev) => ({ ...prev, employee_name: e.target.value }))}
+              onChange={(e) =>
+                setMe((prev) => ({ ...prev, employee_name: e.target.value }))
+              }
             />
             <Box>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                身分組
+                身分角色
               </Typography>
               {renderRoles(me.roles || [])}
             </Box>
+            <Divider />
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                可用權限
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {sortedPermissions.map((code) => (
+                  <Chip
+                    key={code}
+                    label={permissionMap[code] ? `${permissionMap[code]} (${code})` : code}
+                    size="small"
+                  />
+                ))}
+              </Box>
+            </Box>
             <Button variant="contained" onClick={handleSave} disabled={saving}>
-              儲存個人資料
+              更新個人資訊
             </Button>
           </Box>
         )}
