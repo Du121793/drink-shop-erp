@@ -67,13 +67,17 @@ async function handleEvent(event) {
 
   try {
     const isRegister = text === "權限註冊";
-    let permissionLevel = 0;
+    let permissionCodes = [];
     if (lineUserId) {
       try {
-        permissionLevel = await permissionController.getPermissionLevelByLineId(lineUserId);
+        permissionCodes = await permissionController.getPermissionCodesByLineId(
+          lineUserId
+        );
       } catch {}
     }
-    const hasPermission = permissionLevel >= 1;
+    const hasPermission =
+      permissionCodes.includes("system:admin") ||
+      permissionCodes.includes("line:access");
 
     const noPermissionMessage = {
       type: "flex",

@@ -15,6 +15,7 @@ const MUTED_TEXT_COLOR = "#6e6e6e";
 const PROGRESS_BG_COLOR = "#efe7dd";
 const BUBBLE_BG_COLOR = "#f7f3ed";
 const INIT_MODE = (process.env.INIT || "false").toLowerCase() === "true";
+const SYSTEM_ADMIN_ROLE_NAME = "系統管理員";
 
 export async function handleCommandList() {
   const buttons = [
@@ -653,7 +654,7 @@ export async function handleRegister(lineUserId) {
   if (INIT_MODE) {
     try {
       const roles = await permissionController.getRoles();
-      const adminRole = roles.find((r) => r.permission_level === 5);
+      const adminRole = roles.find((r) => r.role_name === SYSTEM_ADMIN_ROLE_NAME);
       if (!adminRole) {
         return {
           type: "text",

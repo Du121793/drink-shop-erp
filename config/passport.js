@@ -7,7 +7,7 @@ dotenv.config();
 
 const jwtSecret = process.env.JWT_SECRET || "fallback-secret";
 
-// JWT é©—è­‰ï¼šè§£æ line_idï¼ŒæŸ¥è©¢æœ€é«˜æ¬Šé™ç­‰ç´šï¼Œæ”¾å…¥ req.user
+// JWT ÅçÃÒ¡G¸Ñ¥X line_id¡A¬d¸ßÅv­­²M³æ«á©ñ¤J req.user
 passport.use(
   new JwtStrategy(
     {
@@ -19,8 +19,10 @@ passport.use(
       try {
         const lineId = payload?.line_id;
         if (!lineId) return done(null, false);
-        const permissionLevel = await permissionController.getPermissionLevelByLineId(lineId);
-        return done(null, { line_id: lineId, permission_level: permissionLevel });
+        const permissions = await permissionController.getPermissionCodesByLineId(
+          lineId
+        );
+        return done(null, { line_id: lineId, permissions });
       } catch (err) {
         return done(err, false);
       }

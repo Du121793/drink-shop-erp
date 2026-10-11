@@ -1,7 +1,7 @@
 ﻿import express from "express";
 import * as logger from "../methods/logger.js";
 import * as inventoryController from "../SQL_controller/inventory.js";
-import { accessChecker } from "../middleware/accessChecker.js";
+import { requirePermissions } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
@@ -11,7 +11,7 @@ const router = express.Router();
  * @returns {object} 200 - { boms: [{ bom_id, material_name, ... }] }
  * @returns {object} 500 - { error: "取得 BOM 失敗" }
  */
-router.get("/boms", accessChecker(1), async (req, res) => {
+router.get("/boms", requirePermissions("inventory:view"), async (req, res) => {
   try {
     const boms = await inventoryController.getBoms();
     res.status(200).json({ boms });
@@ -28,7 +28,7 @@ router.get("/boms", accessChecker(1), async (req, res) => {
  * @returns {object} 201 - { message: "新增 BOM 成功", bomId: number }
  * @returns {object} 500 - { error: "新增 BOM 失敗" }
  */
-router.post("/boms", accessChecker(5), async (req, res) => {
+router.post("/boms", requirePermissions("inventory:write"), async (req, res) => {
   try {
     const newBomId = await inventoryController.createBom(req.body);
     res.status(201).json({ message: "新增 BOM 成功", bomId: newBomId });
@@ -46,7 +46,7 @@ router.post("/boms", accessChecker(5), async (req, res) => {
  * @returns {object} 400 - { error: "請提供 BOM 更新資料" }
  * @returns {object} 500 - { error: "批次更新 BOM 失敗" }
  */
-router.patch("/boms", accessChecker(5), async (req, res) => {
+router.patch("/boms", requirePermissions("inventory:write"), async (req, res) => {
   try {
     if (!Array.isArray(req.body) || req.body.length === 0) {
       return res.status(400).json({ error: "請提供 BOM 更新資料" });
@@ -67,7 +67,10 @@ router.patch("/boms", accessChecker(5), async (req, res) => {
  * @returns {object} 200 - { message: "更新 BOM 成功" }
  * @returns {object} 500 - { error: "更新 BOM 失敗" }
  */
-router.patch("/boms/:id", accessChecker(5), async (req, res) => {
+router.patch(
+  "/boms/:id",
+  requirePermissions("inventory:write"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     await inventoryController.updateBom(id, req.body);
@@ -84,7 +87,7 @@ router.patch("/boms/:id", accessChecker(5), async (req, res) => {
  * @returns {object} 200 - { stock: [{ bom_id, bom_name, total_stock }] }
  * @returns {object} 500 - { error: "取得庫存失敗" }
  */
-router.get("/", accessChecker(1), async (req, res) => {
+router.get("/", requirePermissions("inventory:view"), async (req, res) => {
   try {
     const stock = await inventoryController.getAllStock();
     res.status(200).json({ stock });
@@ -101,7 +104,7 @@ router.get("/", accessChecker(1), async (req, res) => {
  * @returns {object} 200 - { history: [{ inventory_id, stock_in_time, stock_in_qty, remaining_qty, expiry_time }] }
  * @returns {object} 500 - { error: "取得庫存歷史失敗" }
  */
-router.get("/:bom_id", accessChecker(1), async (req, res) => {
+router.get("/:bom_id", requirePermissions("inventory:view"), async (req, res) => {
   try {
     const { bom_id } = req.params;
     const history = await inventoryController.getStockHistory(bom_id);
@@ -120,7 +123,7 @@ router.get("/:bom_id", accessChecker(1), async (req, res) => {
  * @returns {object} 400 - { error: "bom_id 或 quantity 必填" }
  * @returns {object} 500 - { error: "新增庫存失敗" }
  */
-router.post("/", accessChecker(1), async (req, res) => {
+router.post("/", requirePermissions("inventory:write"), async (req, res) => {
   try {
     const { bom_id, quantity, stock_in_time, expiry_time } = req.body;
 
@@ -156,7 +159,10 @@ router.post("/", accessChecker(1), async (req, res) => {
  * @returns {object} 400 - { error: "quantity 必填" }
  * @returns {object} 500 - { error: "更新庫存失敗" }
  */
-router.patch("/:bom_id", accessChecker(5), async (req, res) => {
+router.patch(
+  "/:bom_id",
+  requirePermissions("inventory:write"),
+  async (req, res) => {
   try {
     const { bom_id } = req.params;
     const { quantity, expiry_time } = req.body;
@@ -182,7 +188,10 @@ router.patch("/:bom_id", accessChecker(5), async (req, res) => {
  * @returns {object} 400 - { error: "請提供更新欄位" }
  * @returns {object} 500 - { error: "更新庫存紀錄失敗" }
  */
-router.patch("/detail/:inventory_id", accessChecker(1), async (req, res) => {
+router.patch(
+  "/detail/:inventory_id",
+  requirePermissions("inventory:write"),
+  async (req, res) => {
   try {
     const { inventory_id } = req.params;
     const { stock_in_qty, remaining_qty, expiry_time } = req.body;
@@ -215,7 +224,10 @@ router.patch("/detail/:inventory_id", accessChecker(1), async (req, res) => {
  * @returns {object} 200 - { message: "刪除庫存紀錄成功" }
  * @returns {object} 500 - { error: "刪除庫存紀錄失敗" }
  */
-router.delete("/detail/:inventory_id", accessChecker(1), async (req, res) => {
+router.delete(
+  "/detail/:inventory_id",
+  requirePermissions("inventory:write"),
+  async (req, res) => {
   try {
     const { inventory_id } = req.params;
     await inventoryController.deleteInventoryDetail(inventory_id);

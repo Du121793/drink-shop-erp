@@ -13,12 +13,15 @@ import {
   getBlockedSuppliers,
   unblockSupplierBlock,
 } from "../SQL_controller/supplierReputation.js";
-import { accessChecker } from "../middleware/accessChecker.js";
+import { requirePermissions } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
 // 取得信譽摘要
-router.get("/suppliers/reputation", accessChecker(1), async (req, res) => {
+router.get(
+  "/suppliers/reputation",
+  requirePermissions("supplier:reputation"),
+  async (req, res) => {
   try {
     const idsRaw = req.query?.supplier_ids;
     let ids = [];
@@ -40,7 +43,7 @@ router.get("/suppliers/reputation", accessChecker(1), async (req, res) => {
 
 router.get(
   "/suppliers/:id/reputation",
-  accessChecker(1),
+  requirePermissions("supplier:reputation"),
   async (req, res) => {
     // 取得單一供應商信譽明細
     try {
@@ -58,7 +61,10 @@ router.get(
 );
 
 // 取得信譽規則
-router.get("/suppliers/reputation-rule", accessChecker(3), async (req, res) => {
+router.get(
+  "/suppliers/reputation-rule",
+  requirePermissions("supplier:reputation"),
+  async (req, res) => {
   try {
     const rule = await getReputationRule();
     res.status(200).json({ rule });
@@ -72,7 +78,7 @@ router.get("/suppliers/reputation-rule", accessChecker(3), async (req, res) => {
 
 router.patch(
   "/suppliers/reputation-rule",
-  accessChecker(3),
+  requirePermissions("supplier:reputation"),
   async (req, res) => {
     // 更新信譽規則
     try {
@@ -88,7 +94,10 @@ router.patch(
 );
 
 // 取得封鎖名單
-router.get("/suppliers/blocks", accessChecker(3), async (req, res) => {
+router.get(
+  "/suppliers/blocks",
+  requirePermissions("supplier:reputation"),
+  async (req, res) => {
   try {
     const blocks = await getBlockedSuppliers();
     res.status(200).json({ blocks });
@@ -100,7 +109,7 @@ router.get("/suppliers/blocks", accessChecker(3), async (req, res) => {
 
 router.patch(
   "/suppliers/blocks/:id/unblock",
-  accessChecker(3),
+  requirePermissions("supplier:reputation"),
   async (req, res) => {
     // 解除封鎖
     try {
@@ -118,7 +127,10 @@ router.patch(
 );
 
 // 取得事件類型
-router.get("/suppliers/event-types", accessChecker(1), async (req, res) => {
+router.get(
+  "/suppliers/event-types",
+  requirePermissions("supplier:reputation"),
+  async (req, res) => {
   try {
     const includeInactive =
       String(req.query?.include_inactive || "").toLowerCase() === "true";
@@ -133,7 +145,10 @@ router.get("/suppliers/event-types", accessChecker(1), async (req, res) => {
 });
 
 // 新增事件類型
-router.post("/suppliers/event-types", accessChecker(3), async (req, res) => {
+router.post(
+  "/suppliers/event-types",
+  requirePermissions("supplier:reputation"),
+  async (req, res) => {
   try {
     const payload = req.body || {};
     if (!payload.event_code || !payload.event_name) {
@@ -153,7 +168,7 @@ router.post("/suppliers/event-types", accessChecker(3), async (req, res) => {
 
 router.patch(
   "/suppliers/event-types/:id",
-  accessChecker(3),
+  requirePermissions("supplier:reputation"),
   async (req, res) => {
     // 更新事件類型
     try {
@@ -170,7 +185,10 @@ router.patch(
 );
 
 // 建立供應商事件
-router.post("/suppliers/:id/events", accessChecker(3), async (req, res) => {
+router.post(
+  "/suppliers/:id/events",
+  requirePermissions("supplier:reputation"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const payload = req.body || {};

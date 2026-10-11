@@ -12,7 +12,7 @@ const lineClient = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
-const ADMIN_PERMISSION_LEVEL = 5;
+const ADMIN_PERMISSION_CODE = "system:admin";
 const PRIMARY_COLOR = "#905c44";
 const ACCENT_COLOR = "#73432f";
 const BUBBLE_BG_COLOR = "#f7f3ed";
@@ -56,8 +56,8 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "警報內容無效" });
     }
 
-    const admins = await permissionController.getEmployeesByPermissionLevel(
-      ADMIN_PERMISSION_LEVEL
+    const admins = await permissionController.getEmployeesByPermissionCode(
+      ADMIN_PERMISSION_CODE
     );
     const adminLineIds = admins.map((a) => a.line_id).filter(Boolean);
 

@@ -1,7 +1,7 @@
 import express from "express";
 import * as logger from "../methods/logger.js";
 import * as menuController from "../SQL_controller/menu.js";
-import { accessChecker } from "../middleware/accessChecker.js";
+import { requirePermissions } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
@@ -44,7 +44,10 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.get("/:id/materials", accessChecker(3), async (req, res) => {
+router.get(
+  "/:id/materials",
+  requirePermissions("menu:manage"),
+  async (req, res) => {
   try {
     const menuId = req.params.id;
     const materials = await menuController.getBaseMaterialsByProductId(menuId);
@@ -57,7 +60,7 @@ router.get("/:id/materials", accessChecker(3), async (req, res) => {
 });
 
 // 建立/修改/刪除菜單，需要權限 3
-router.post("/", accessChecker(3), async (req, res) => {
+router.post("/", requirePermissions("menu:manage"), async (req, res) => {
   try {
     const { name, price, optionIds, baseMaterials } = req.body;
     if (!name || price === undefined) {
@@ -77,7 +80,7 @@ router.post("/", accessChecker(3), async (req, res) => {
   }
 });
 
-router.put("/:id", accessChecker(3), async (req, res) => {
+router.put("/:id", requirePermissions("menu:manage"), async (req, res) => {
   try {
     const menuId = req.params.id;
     await menuController.updateMenu(menuId, req.body);
@@ -89,7 +92,7 @@ router.put("/:id", accessChecker(3), async (req, res) => {
   }
 });
 
-router.delete("/:id", accessChecker(3), async (req, res) => {
+router.delete("/:id", requirePermissions("menu:manage"), async (req, res) => {
   try {
     const menuId = req.params.id;
     await menuController.deleteMenu(menuId);
@@ -102,7 +105,7 @@ router.delete("/:id", accessChecker(3), async (req, res) => {
 });
 
 // 自訂義選項 CRUD
-router.post("/option", accessChecker(3), async (req, res) => {
+router.post("/option", requirePermissions("menu:manage"), async (req, res) => {
   try {
     const { name, details } = req.body;
     if (!name || !details || !Array.isArray(details) || details.length === 0) {
@@ -117,7 +120,10 @@ router.post("/option", accessChecker(3), async (req, res) => {
   }
 });
 
-router.put("/option/:id", accessChecker(3), async (req, res) => {
+router.put(
+  "/option/:id",
+  requirePermissions("menu:manage"),
+  async (req, res) => {
   try {
     const optionId = req.params.id;
     const { name, details } = req.body;
@@ -133,7 +139,10 @@ router.put("/option/:id", accessChecker(3), async (req, res) => {
   }
 });
 
-router.delete("/option/:id", accessChecker(3), async (req, res) => {
+router.delete(
+  "/option/:id",
+  requirePermissions("menu:manage"),
+  async (req, res) => {
   try {
     const optionId = req.params.id;
     await menuController.deleteCustomOption(optionId);

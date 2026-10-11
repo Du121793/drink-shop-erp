@@ -1,25 +1,33 @@
 import { requireAuth } from "../config/passport.js";
 
 /**
- * 權限檢查中間件
- * - 若未設定 NODE_ENV=production，直接放行（開發模式）
- * - 已登入（passport jwt）且 permission_level >= minLevel 才放行
- * - 其他情況回傳 401
+ * 權限檢查：
+ * - 非 production 直接放行
+ * - production 必須登入且命中任一權限代碼
  */
-export const accessChecker = (minLevel = 0) => {
-  // 開發模式全部放行
+export const requirePermissions = (...codes) => {
   const bypass = (process.env.NODE_ENV || "").toLowerCase() !== "production";
   if (bypass) {
     return (req, res, next) => next();
   }
 
-  // 生產模式：需先通過 JWT 驗證，再檢查權限等級
+  const required = Array.isArray(codes[0]) ? codes[0] : codes;
+
   return [
     requireAuth,
     (req, res, next) => {
-      const level = req?.user?.permission_level ?? 0;
-      if (level >= minLevel) return next();
+      const list = Array.isArray(req?.user?.permissions)
+        ? req.user.permissions
+        : [];
+      const set = new Set(list);
+      if (set.has("system:admin")) return next();
+      if (required.length === 0) return next();
+      const allowed = required.some((code) => set.has(code));
+      if (allowed) return next();
       return res.status(401).json({ error: "權限不足" });
     },
   ];
 };
+
+// 相容舊名稱
+export const accessChecker = requirePermissions;

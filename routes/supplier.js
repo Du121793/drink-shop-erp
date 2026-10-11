@@ -1,13 +1,13 @@
 import express from "express";
 import * as logger from "../methods/logger.js";
 import * as supplierController from "../SQL_controller/supplier.js";
-import { accessChecker } from "../middleware/accessChecker.js";
+import { requirePermissions } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
 // 廠商 CRUD
 // 取得廠商清單
-router.get("/suppliers", accessChecker(1), async (req, res) => {
+router.get("/suppliers", requirePermissions("supplier:view"), async (req, res) => {
   try {
     const suppliers = await supplierController.getSuppliers();
     res.status(200).json({ suppliers });
@@ -18,7 +18,7 @@ router.get("/suppliers", accessChecker(1), async (req, res) => {
 });
 
 // 新增廠商
-router.post("/suppliers", accessChecker(3), async (req, res) => {
+router.post("/suppliers", requirePermissions("supplier:manage"), async (req, res) => {
   try {
     const { supplier_name, email, phone } = req.body;
     if (!supplier_name) {
@@ -37,7 +37,10 @@ router.post("/suppliers", accessChecker(3), async (req, res) => {
 });
 
 // 更新廠商
-router.patch("/suppliers/:id", accessChecker(3), async (req, res) => {
+router.patch(
+  "/suppliers/:id",
+  requirePermissions("supplier:manage"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { supplier_name, email, phone } = req.body;
@@ -54,7 +57,10 @@ router.patch("/suppliers/:id", accessChecker(3), async (req, res) => {
 });
 
 // 刪除廠商
-router.delete("/suppliers/:id", accessChecker(3), async (req, res) => {
+router.delete(
+  "/suppliers/:id",
+  requirePermissions("supplier:manage"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     await supplierController.deleteSupplier(id);
@@ -67,7 +73,10 @@ router.delete("/suppliers/:id", accessChecker(3), async (req, res) => {
 
 // 原料-廠商關聯
 // 查詢原料-廠商關聯
-router.get("/suppliers/materials", accessChecker(1), async (req, res) => {
+router.get(
+  "/suppliers/materials",
+  requirePermissions("supplier:view"),
+  async (req, res) => {
   try {
     const { bom_id } = req.query;
     const list = await supplierController.getMaterialSuppliers(bom_id);
@@ -79,7 +88,10 @@ router.get("/suppliers/materials", accessChecker(1), async (req, res) => {
 });
 
 // 新增或更新原料-廠商關聯
-router.post("/suppliers/materials", accessChecker(3), async (req, res) => {
+router.post(
+  "/suppliers/materials",
+  requirePermissions("supplier:manage"),
+  async (req, res) => {
   try {
     const { supplier_id, bom_id, is_default = false } = req.body;
     if (!supplier_id || !bom_id) {
@@ -100,7 +112,7 @@ router.post("/suppliers/materials", accessChecker(3), async (req, res) => {
 // 設定原料預設廠商
 router.patch(
   "/suppliers/materials/default",
-  accessChecker(3),
+  requirePermissions("supplier:manage"),
   async (req, res) => {
     try {
       const { supplier_id, bom_id } = req.body;
@@ -117,7 +129,10 @@ router.patch(
 );
 
 // 刪除原料-廠商關聯
-router.delete("/suppliers/materials", accessChecker(3), async (req, res) => {
+router.delete(
+  "/suppliers/materials",
+  requirePermissions("supplier:manage"),
+  async (req, res) => {
   try {
     const { supplier_id, bom_id } = req.body;
     if (!supplier_id || !bom_id) {
@@ -133,7 +148,10 @@ router.delete("/suppliers/materials", accessChecker(3), async (req, res) => {
 
 // 叫貨紀錄
 // 取得叫貨紀錄批次
-router.get("/purchase-orders", accessChecker(1), async (req, res) => {
+router.get(
+  "/purchase-orders",
+  requirePermissions("purchase:view"),
+  async (req, res) => {
   try {
     const groups = await supplierController.getPurchaseOrderGroups();
     res.status(200).json({ groups });
@@ -144,7 +162,10 @@ router.get("/purchase-orders", accessChecker(1), async (req, res) => {
 });
 
 // 建立叫貨紀錄
-router.post("/purchase-orders", accessChecker(1), async (req, res) => {
+router.post(
+  "/purchase-orders",
+  requirePermissions("purchase:write"),
+  async (req, res) => {
   try {
     const orders = Array.isArray(req.body?.orders) ? req.body.orders : [];
     if (!orders.length) {
@@ -162,7 +183,10 @@ router.post("/purchase-orders", accessChecker(1), async (req, res) => {
 });
 
 // 更新叫貨狀態並寫入事件
-router.patch("/purchase-orders/:id/status", accessChecker(1), async (req, res) => {
+router.patch(
+  "/purchase-orders/:id/status",
+  requirePermissions("purchase:write"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const {

@@ -4,7 +4,7 @@ import { calculateRestockSuggestionsByRules } from "../methods/restock_rules/eng
 import * as supplierController from "../SQL_controller/supplier.js";
 import * as restockRuleController from "../SQL_controller/restockRule.js";
 import * as logger from "../methods/logger.js";
-import { accessChecker } from "../middleware/accessChecker.js";
+import { requirePermissions } from "../middleware/accessChecker.js";
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ async function attachSuppliers(suggestions) {
 }
 
 // 取得自動補貨建議清單
-router.get("/", accessChecker(1), async (req, res) => {
+router.get("/", requirePermissions("restock:view"), async (req, res) => {
   try {
     const suggestions = await buildSuggestions();
     const withSuppliers = await attachSuppliers(suggestions);
@@ -39,7 +39,7 @@ router.get("/", accessChecker(1), async (req, res) => {
 });
 
 // 套用手動調整的建議量，並附帶預設廠商
-router.patch("/", accessChecker(1), async (req, res) => {
+router.patch("/", requirePermissions("restock:apply"), async (req, res) => {
   try {
     const overrides = Array.isArray(req.body?.overrides) ? req.body.overrides : [];
     const suggestions = await buildSuggestions();
@@ -71,7 +71,7 @@ router.patch("/", accessChecker(1), async (req, res) => {
 });
 
 // 規則管理
-router.get("/rules", accessChecker(1), async (req, res) => {
+router.get("/rules", requirePermissions("restock:rules"), async (req, res) => {
   try {
     const rules = await restockRuleController.getRestockRules();
     res.status(200).json({ rules });
@@ -81,7 +81,7 @@ router.get("/rules", accessChecker(1), async (req, res) => {
   }
 });
 
-router.post("/rules", accessChecker(5), async (req, res) => {
+router.post("/rules", requirePermissions("restock:rules"), async (req, res) => {
   try {
     const { rule_name, rule_type } = req.body || {};
     if (!rule_name || !rule_type) {
@@ -95,7 +95,7 @@ router.post("/rules", accessChecker(5), async (req, res) => {
   }
 });
 
-router.patch("/rules/:id", accessChecker(5), async (req, res) => {
+router.patch("/rules/:id", requirePermissions("restock:rules"), async (req, res) => {
   try {
     const { id } = req.params;
     await restockRuleController.updateRestockRule(Number(id), req.body || {});
@@ -106,7 +106,7 @@ router.patch("/rules/:id", accessChecker(5), async (req, res) => {
   }
 });
 
-router.get("/rules/:id/usage", accessChecker(5), async (req, res) => {
+router.get("/rules/:id/usage", requirePermissions("restock:rules"), async (req, res) => {
   try {
     const { id } = req.params;
     const usage = await restockRuleController.getRestockRuleUsage(Number(id));
@@ -117,7 +117,7 @@ router.get("/rules/:id/usage", accessChecker(5), async (req, res) => {
   }
 });
 
-router.delete("/rules/:id", accessChecker(5), async (req, res) => {
+router.delete("/rules/:id", requirePermissions("restock:rules"), async (req, res) => {
   try {
     const { id } = req.params;
     const ruleId = Number(id);
@@ -139,7 +139,10 @@ router.delete("/rules/:id", accessChecker(5), async (req, res) => {
   }
 });
 
-router.get("/materials/:bom_id/rules", accessChecker(1), async (req, res) => {
+router.get(
+  "/materials/:bom_id/rules",
+  requirePermissions("restock:rules"),
+  async (req, res) => {
   try {
     const { bom_id } = req.params;
     const assignments = await restockRuleController.getRestockRuleAssignmentsByBom(
@@ -152,7 +155,10 @@ router.get("/materials/:bom_id/rules", accessChecker(1), async (req, res) => {
   }
 });
 
-router.put("/materials/:bom_id/rules/:rule_id", accessChecker(5), async (req, res) => {
+router.put(
+  "/materials/:bom_id/rules/:rule_id",
+  requirePermissions("restock:rules"),
+  async (req, res) => {
   try {
     const { bom_id, rule_id } = req.params;
     await restockRuleController.upsertRestockRuleAssignment(
@@ -167,7 +173,10 @@ router.put("/materials/:bom_id/rules/:rule_id", accessChecker(5), async (req, re
   }
 });
 
-router.delete("/materials/:bom_id/rules/:rule_id", accessChecker(5), async (req, res) => {
+router.delete(
+  "/materials/:bom_id/rules/:rule_id",
+  requirePermissions("restock:rules"),
+  async (req, res) => {
   try {
     const { bom_id, rule_id } = req.params;
     await restockRuleController.deleteRestockRuleAssignment(
